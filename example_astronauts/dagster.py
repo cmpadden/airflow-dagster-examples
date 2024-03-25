@@ -1,5 +1,4 @@
-from dagster import asset, AutoMaterializePolicy, AutoMaterializeRule, MaterializeResult, AssetExecutionContext, sensor, SensorResult, RunRequest, DynamicPartitionsDefinition, RunConfig, SensorEvaluationContext
-from pydantic import BaseModel
+from dagster import asset, Config, AutoMaterializePolicy, AutoMaterializeRule, MaterializeResult, AssetExecutionContext, sensor, SensorResult, RunRequest, DynamicPartitionsDefinition, RunConfig, SensorEvaluationContext
 import requests
 import os
 import json
@@ -11,7 +10,7 @@ astronauts_in_space_partition = DynamicPartitionsDefinition(
     name="astronauts_in_space_partition"
 )
 
-class AstronautConfig(BaseModel):
+class AstronautConfig(Config):
     craft: str
     name: str
     greeting: str = "Hello! :)"

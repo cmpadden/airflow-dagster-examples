@@ -1,5 +1,4 @@
-from dagster import asset, sensor, SensorResult, RunRequest,RunConfig, SensorEvaluationContext, MaterializeResult, AssetExecutionContext
-from pydantic import BaseModel
+from dagster import asset, Config, sensor, SensorResult, RunRequest,RunConfig, SensorEvaluationContext, MaterializeResult, AssetExecutionContext
 from boto3 import client
 import os
 
@@ -8,17 +7,17 @@ LOCAL_PATH = "data/poems/"
 
 s3_client = client("s3")
 
-class Poem(BaseModel):
+class Poem(Config):
     filename: str
 
 @asset
-def local_poems(context: AssetExecutionContext, poem_config: Poem) -> MaterializeResult:
+def local_poems(context: AssetExecutionContext, config: Poem) -> MaterializeResult:
     # download the poem from the bucket
     os.makedirs(LOCAL_PATH, exist_ok=True)
-    s3_client.download_file(BUCKET_PATH, f"poems/{poem_config.filename}", f"{LOCAL_PATH}{poem_config.filename}")
+    s3_client.download_file(BUCKET_PATH, f"poems/{config.filename}", f"{LOCAL_PATH}{config.filename}")
 
     # read the poem into memory
-    with open(f"{LOCAL_PATH}{poem_config.filename}", "r") as f:
+    with open(f"{LOCAL_PATH}{config.filename}", "r") as f:
         poem = f.read()
 
     # log the poem to the console
@@ -26,7 +25,7 @@ def local_poems(context: AssetExecutionContext, poem_config: Poem) -> Materializ
 
     return MaterializeResult(
         metadata={
-            "filename": poem_config.filename,
+            "filename": config.filename,
             "poem_snippet": poem[:100] + "...",
             "poem_length": len(poem),
         }
@@ -34,7 +33,7 @@ def local_poems(context: AssetExecutionContext, poem_config: Poem) -> Materializ
 
 
 @sensor(
-    asset_selection=local_poems
+    asset_selection=[local_poems]
 )
 def list_files_sensor(context: SensorEvaluationContext):
     poems = set(context.cursor) if context.cursor else set()
@@ -57,7 +56,11 @@ def list_files_sensor(context: SensorEvaluationContext):
             run_key=filename,
             run_config=RunConfig(
                 ops={
-                    "local_poems": Poem(filename=filename)
+                    "local_poems": {
+                        "config": {
+                            "filename": filename
+                        }
+                    }
                 }
             )
         ))
