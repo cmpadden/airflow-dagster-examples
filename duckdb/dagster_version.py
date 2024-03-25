@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-BASE_PATH = Path("data/")
+BASE_PATH = Path("../data/")
 
 duckdb_resource = DuckDBResource(
     database=BASE_PATH / "duckdb.db"
@@ -46,20 +46,21 @@ def parquet_file():
 @asset
 def duckdb_table(duckdb: DuckDBResource):
     """A table about ducks, saved in a DuckDB database."""
-    conn = duckdb_resource.get_connection()
-    conn.execute(
-        f"CREATE OR REPLACE TABLE ducks_table AS SELECT * FROM read_parquet('{BASE_PATH / 'duck_info.parquet'}')"
-    )
-    conn.close()
+    with duckdb.get_connection() as conn:
+        conn.execute(
+            f"CREATE OR REPLACE TABLE ducks_table AS SELECT * FROM read_parquet('{BASE_PATH / 'duck_info.parquet'}')"
+        )
+        conn.close()
 
 @asset
 def high_quacking_ducks(context: AssetExecutionContext, duckdb: DuckDBResource) -> MaterializeResult:
     """Ducks that quack more than 15 times per hour."""
-    conn = duckdb_resource.get_connection()
-    ducks_info = conn.execute(
-        f"SELECT * FROM ducks_table WHERE num_quacks_per_hour > 15"
-    ).fetchdf()
-    conn.close()
+    
+    with duckdb.get_connection() as conn:
+        ducks_info = conn.execute(
+            f"SELECT * FROM ducks_table WHERE num_quacks_per_hour > 15"
+        ).fetchdf()
+        conn.close()
 
     context.log.info(ducks_info)
 
