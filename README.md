@@ -1,5 +1,7 @@
 # airflow-dagster-examples
-A compilation of common Airflow DAGs and their Dagster equivalent
+A compilation of common Airflow DAGs and their Dagster equivalent.
+
+Airflow DAGs are pulled from the [Airflow DAGs repository](https://registry.astronomer.io/dags).
 
 ## To run
 
