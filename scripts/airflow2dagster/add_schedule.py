@@ -1,0 +1,46 @@
+import dspy
+from airflow2dagster.utils import extract_code_block_from_markdown
+from metrics.run_validity import is_runnable
+
+
+class AddScheduleSignature(dspy.Signature):
+    """
+    Create an asset job over the assets and add a schedule to it.
+
+    The schedule is consistent with the Airflow code."""
+
+    context = dspy.InputField(desc="Potentially relevant Dagster documentation")
+    airflow_code = dspy.InputField(desc="Airflow code containing schedule")
+    input_dagster_code = dspy.InputField(desc="Dagster code without schedule")
+    dagster_code = dspy.OutputField(
+        desc="Input Dagster code with similar schedule to Airflow code, as a single file"
+    )
+
+
+class AddScheduleModule(dspy.Module):
+    def __init__(self):
+        self.retrieve = dspy.Retrieve(k=3)
+        self.add_schedule = dspy.ChainOfThought(AddScheduleSignature)
+
+    def forward(self, airflow_code: str, input_dagster_code: str) -> dspy.Prediction:
+        context = self.retrieve(self.add_schedule.signature.__doc__).passages
+        pred = self.add_schedule(
+            context="\n".join(context),
+            airflow_code=airflow_code,
+            input_dagster_code=input_dagster_code,
+        )
+        pred.dagster_code = extract_code_block_from_markdown(pred.dagster_code)
+
+        dspy.Assert(
+            "define_asset_job" in pred.dagster_code,
+            "Use `define_asset_job` to create a job over the assets",
+        )
+        dspy.Assert(
+            "@asset" in pred.dagster_code,
+            "Do not forget to include the input Dagster code in the final code.",
+        )
+        dspy.Suggest(
+            *is_runnable(pred.dagster_code, verbose=True)
+        )  # Some code cannot be run without external dependencies
+
+        return dspy.Prediction(dagster_code=pred.dagster_code)
