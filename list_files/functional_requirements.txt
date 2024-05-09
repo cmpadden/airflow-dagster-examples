@@ -1,0 +1,4 @@
+- Files are read from s3://ce-2-8-examples-bucket
+- Files exists in local storage at poems/
+- (Orchestration) Run at 00:00 UTC every Sunday
+- (Orchestration) Tags "ObjectStorage", "webinar", "2-8" are applied

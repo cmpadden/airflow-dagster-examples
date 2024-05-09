@@ -1,0 +1,2 @@
+- duck_info.parquet is created with a certain schema
+- ducks_table exists in DuckDB at duckdb.db
