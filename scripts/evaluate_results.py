@@ -1,10 +1,8 @@
 from pathlib import Path
-from typing import Any, List
 
 import evaluate
 import pandas as pd
 import typer
-
 from metrics.functional_requirements import (
     check_functional_requirements,
     create_chain,
@@ -12,13 +10,20 @@ from metrics.functional_requirements import (
 )
 from metrics.llm_checks import check_assets_only, check_scheduling_definition
 from metrics.run_validity import is_runnable
+from pydantic import BaseModel
 
 app = typer.Typer()
 
 
+class Reference(BaseModel):
+    example_name: str
+    dagster_code: Path
+    functional_requirements: Path
+
+
 def _functional_requirements(
     candidate_code: str, functional_requirements: Path
-) -> List[bool]:
+) -> list[bool]:
     functional_requirements_result = check_functional_requirements(
         create_chain(),
         code=candidate_code,
@@ -30,15 +35,15 @@ def _functional_requirements(
     return functional_requirements_met
 
 
-def _evaluate(references: List, candidates: List) -> pd.DataFrame:
+def _evaluate(references: list[Reference], candidates: list[Path]) -> pd.DataFrame:
     rouge = evaluate.load("rouge")
     bleu = evaluate.load("bleu")
 
     assert len(references) == len(candidates)
-    assert all([r["name"] == c["name"] for (r, c) in zip(references, candidates)])
+    assert all([r.example_name == c.parent.name for (r, c) in zip(references, candidates)])
 
-    references_code = [x["filepath"].read_text() for x in references]
-    candidates_code = [x["filepath"].read_text() for x in candidates]
+    references_code = [x.dagster_code.read_text() for x in references]
+    candidates_code = [x.read_text() for x in candidates]
 
     is_runnable_result = [is_runnable(x) for x in candidates_code]
 
@@ -58,7 +63,7 @@ def _evaluate(references: List, candidates: List) -> pd.DataFrame:
     functional_requirements = [
         _functional_requirements(
             candidate_code=candidates_code[i],
-            functional_requirements=references[i]["functional_requirements"],
+            functional_requirements=references[i].functional_requirements,
         )
         for i in range(len(references))
     ]
@@ -67,7 +72,7 @@ def _evaluate(references: List, candidates: List) -> pd.DataFrame:
     scheduling_ = [check_scheduling_definition(dagster_code=x) for x in candidates_code]
     metrics_result = pd.DataFrame(
         {
-            "name": [x["name"] for x in candidates],
+            "name": [x.parent.name for x in candidates],
             "code_is_runnable": is_runnable_result,
             "bleu": results_bleu,
             "rouge": results_rouge,
@@ -97,11 +102,11 @@ def _evaluate(references: List, candidates: List) -> pd.DataFrame:
     return metrics_result
 
 
-def read_files(result_folder: Path) -> list[dict[str, Any]]:
+def read_reference_files(result_folder: Path) -> list[Reference]:
     subfolders = [
         folder
         for folder in result_folder.iterdir()
-        if folder.is_dir() and folder.name not in ("data", ".git")
+        if folder.is_dir() and folder.name not in ("data", ".git", "scripts")
     ]
 
     samples = []
@@ -109,26 +114,29 @@ def read_files(result_folder: Path) -> list[dict[str, Any]]:
         reference = folder / "dagster_version.py"
 
         samples.append(
-            {
-                "name": folder.name,
-                "filepath": reference,
-            }
-        )
-
-        if (folder / "functional_requirements.txt").exists():
-            samples[-1]["functional_requirements"] = (
-                folder / "functional_requirements.txt"
+            Reference(
+                example_name=folder.name,
+                dagster_code=reference,
+                functional_requirements=folder / "functional_requirements.txt",
             )
+        )
     return samples
+
+
+def read_files(filename_pattern: str, directory: Path) -> list[Path]:
+    return [f for f in directory.rglob("**/" + filename_pattern)]
 
 
 @app.command()
 def build_supervised_leaderboard():
-    references = read_files(result_folder=Path('.'))
-    just_copy_airflow = read_files(result_folder=Path("results/just-copy-airflow/"))
-    human = read_files(result_folder=Path("results/human/"))
-    gpt_naive = read_files(result_folder=Path("results/gpt_naive/"))
-    gpt_dspy = read_files(result_folder=Path("results/gpt_dspy/"))
+    references = read_reference_files(Path("../"))
+
+    just_copy_airflow = read_files(
+        filename_pattern="airflow.py", directory=Path("./results")
+    )
+    human = read_files(filename_pattern="human.py", directory=Path("./results"))
+    gpt_naive = read_files(filename_pattern="gpt_naive.py", directory=Path("./results"))
+    gpt_dspy = read_files(filename_pattern="gpt_dspy.py", directory=Path("./results"))
 
     just_copy_airflow_metrics = _evaluate(
         references=references, candidates=just_copy_airflow
@@ -143,7 +151,7 @@ def build_supervised_leaderboard():
 
     gpt_dspy_metrics = _evaluate(references=references, candidates=gpt_dspy)
     gpt_dspy_metrics["source"] = "gpt_dspy"
-
+    breakpoint()
     supervised_leaderboard = pd.concat(
         [just_copy_airflow_metrics, human_metrics, gpt_naive_metrics, gpt_dspy_metrics],
         ignore_index=True,
