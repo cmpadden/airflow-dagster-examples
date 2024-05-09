@@ -5,8 +5,13 @@
 > - An `OPENAI_API_KEY` is required to run the scripts below.
 Please add it to your `.env` file.
 
+## Generate translation for a single example using DSPy
+```sh
+poetry run python -m airflow2dagster --airflow-filepath "../<path-to-airflow-file>"
+```
 
-## Generate
+
+## Generate translations for all examples
 ```sh
 poetry run python generate.py cli-generate
 ```
