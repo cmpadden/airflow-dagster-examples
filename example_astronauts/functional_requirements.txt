@@ -1,0 +1,4 @@
+- List of astronauts saved in current_astronauts.txt (Not present in Airflow example)
+- (Orchestration) Runs daily
+- (Orchestration) On failure, retry thrice
+- (Orchestration) Add "example" tag

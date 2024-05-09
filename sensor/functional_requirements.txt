@@ -1,0 +1,4 @@
+- Data is read from API http://shibe.online/api/shibes
+- If failed to read from API, print failing status code, and try again in 10 secs
+- On success, image URL is displayed
+- (Orchestration) A sensor is created that pings every 10 secs

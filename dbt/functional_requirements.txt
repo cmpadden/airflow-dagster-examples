@@ -1,0 +1,3 @@
+- dbt project definitions can be loaded (Answer hallucinated by LLM evaluator)
+- (Orchestration) materializations are scheduled daily
+- (Orchestration) On failure, retry twice

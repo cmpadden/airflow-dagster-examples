@@ -1,0 +1,5 @@
+- Data is pulled from api.coingecko.com/api/v3/simple for Bitcoin
+- Bitcoin prices are saved at bitcoin_price.txt (Not present in Airflow example)
+- (Orchestration) This materialization runs daily
+- (Orchestration) On failure, retry twice
+- (Orchestration) Job contains "TaskFlow" and "Tutorial Part 1" tags

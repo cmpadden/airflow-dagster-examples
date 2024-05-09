@@ -1,0 +1,1 @@
+"""Failed to generate Dagster code with error: All created Dagster objects should be added to a global `Definitions` object. Do not use the legacy `@repository` syntax."""
