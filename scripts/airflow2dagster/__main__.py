@@ -61,6 +61,5 @@ if __name__ == "__main__":
     app()
 
 
-# TODO: Add embedding logic (Should be a separate command / notebook)
 # TODO: Handle resources and IO managers
 # TODO: Handle inputs using Configs
