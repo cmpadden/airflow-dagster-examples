@@ -36,6 +36,7 @@ def get_translator(retries: int | None) -> Model:
     model = Model()
     if retries:
         for name, submodule in model.named_sub_modules():
+            # Do not wrap main module with assertions, as it'll encounter a deadlock
             if name == "self":
                 continue
             submodule.activate_assertions(
