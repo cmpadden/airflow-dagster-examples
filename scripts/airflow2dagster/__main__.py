@@ -1,14 +1,11 @@
-from functools import partial
 from pathlib import Path
 from typing import Optional
 
-import typer
-from dotenv import load_dotenv
-
 import dspy
-from airflow2dagster.model import Model
+import typer
+from airflow2dagster.model import get_translator
 from airflow2dagster.utils import configure_dspy
-from dspy.primitives.assertions import backtrack_handler
+from dotenv import load_dotenv
 
 load_dotenv()
 configure_dspy()
@@ -16,17 +13,8 @@ configure_dspy()
 app = typer.Typer()
 
 
-def _get_translator(retries: int | None) -> Model:
-    model = Model()
-    if retries:
-        model = model.activate_assertions(
-            partial(backtrack_handler, max_backtracks=retries)
-        )
-    return model
-
-
 def translate_airflow_code(airflow_code: str, retries: int | None) -> str:
-    translator = _get_translator(retries=retries)
+    translator = get_translator(retries=retries)
     return translator(airflow_code).dagster_code
 
 
