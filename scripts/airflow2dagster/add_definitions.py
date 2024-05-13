@@ -11,7 +11,6 @@ class AddDefinitionsSignature(dspy.Signature):
     """
 
     context = dspy.InputField(desc="Potentially relevant Dagster documentation")
-    # airflow_code = dspy.InputField(desc="Airflow code containing schedule")
     input_dagster_code = dspy.InputField(desc="Dagster code without schedule")
     dagster_code = dspy.OutputField(
         desc="Input Dagster code with similar schedule to Airflow code, as a single file"
