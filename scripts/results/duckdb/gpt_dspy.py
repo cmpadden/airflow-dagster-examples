@@ -1,11 +1,21 @@
 
-from dagster import asset, MaterializeResult, MetadataValue, ScheduleDefinition, define_asset_job, repository, AssetSelection, Definitions
+from dagster import (
+    AssetSelection,
+    Definitions,
+    ScheduleDefinition,
+    define_asset_job,
+    load_assets_from_modules,
+    DefaultScheduleStatus,
+    asset,
+    MaterializeResult,
+    MetadataValue
+)
 import pandas as pd
 import duckdb
-import os
 
+# Define the assets
 @asset
-def duck_data() -> MaterializeResult:
+def duck_info():
     data = {
         "name": ["Mallard", "Pekin", "Muscovy", "Rouen", "Indian Runner"],
         "country_of_origin": ["North America", "China", "South America", "France", "India"],
@@ -14,65 +24,49 @@ def duck_data() -> MaterializeResult:
         "num_quacks_per_hour": [10, 20, 25, 5, 44],
     }
     df = pd.DataFrame(data)
-    return MaterializeResult(
-        df,
-        metadata={
-            "num_rows": MetadataValue.int(len(df)),
-            "data_types": MetadataValue.json(df.dtypes.apply(lambda x: str(x)).to_dict())
-        }
-    )
-
-@asset
-def duck_info_parquet(duck_data) -> MaterializeResult:
     file_path = "file://include/duck_info.parquet"
-    duck_data.to_parquet(file_path)
-    file_size = os.path.getsize(file_path.replace("file://", ""))
+    df.to_parquet(file_path)
+    conn = duckdb.connect(database="include/duckdb.db")
+    conn.execute(f"CREATE OR REPLACE TABLE ducks_table AS SELECT * FROM read_parquet('{file_path}')")
+    conn.close()
     return MaterializeResult(
-        file_path,
+        value=df,
         metadata={
             "file_path": MetadataValue.path(file_path),
-            "file_size": MetadataValue.int(file_size)
-        }
-    )
-
-@asset(required_resource_keys={"io_manager"})
-def duckdb_ingest(duck_info_parquet) -> MaterializeResult:
-    conn = duckdb.connect(database="include/duckdb.db")
-    result = conn.execute(f"CREATE OR REPLACE TABLE ducks_table AS SELECT * FROM read_parquet('{duck_info_parquet}')")
-    conn.close()
-    return MaterializeResult(
-        None,
-        metadata={
-            "ingestion_status": MetadataValue.text("Completed" if result.success() else "Failed"),
-            "records_ingested": MetadataValue.int(result.row_count())
+            "num_rows": MetadataValue.int(len(df))
         }
     )
 
 @asset
-def filtered_duck_info() -> MaterializeResult:
+def filtered_duck_info(duck_info):
+    query = "SELECT * FROM ducks_table WHERE num_quacks_per_hour > 15"
     conn = duckdb.connect(database="include/duckdb.db")
-    ducks_info = conn.execute("SELECT * FROM ducks_table WHERE num_quacks_per_hour > 15").fetchdf()
+    ducks_info = conn.execute(query).fetchdf()
     conn.close()
     return MaterializeResult(
-        ducks_info,
+        value=ducks_info,
         metadata={
-            "filter_criteria": MetadataValue.text("num_quacks_per_hour > 15"),
-            "records_returned": MetadataValue.int(len(ducks_info))
+            "query": MetadataValue.text(query),
+            "num_rows_filtered": MetadataValue.int(len(ducks_info))
         }
     )
 
-# Define the job that includes all assets
-duck_info_job = define_asset_job("duck_info_job", selection=AssetSelection.all())
+# Load all assets
+all_assets = [duck_info, filtered_duck_info]
 
-# Define the schedule using a cron expression that matches the Airflow schedule
-duck_info_schedule = ScheduleDefinition(
-    job=duck_info_job,
-    cron_schedule="0 0 * * 0",  # Every Sunday at midnight
-    name="weekly_duck_info_schedule"
+# Define a job that will materialize the assets
+duckdb_job = define_asset_job("duckdb_job", selection=AssetSelection.all())
+
+# Define a schedule for the job with a cron schedule matching the Airflow schedule
+duckdb_schedule = ScheduleDefinition(
+    job=duckdb_job,
+    cron_schedule="0 0 * * 0",  # every Sunday at midnight
+    default_status=DefaultScheduleStatus.RUNNING  # Automatically start the schedule
 )
 
+# Combine definitions into a single Definitions object
 defs = Definitions(
-    assets=[duck_data, duck_info_parquet, duckdb_ingest, filtered_duck_info],
-    jobs=[duck_info_job],
-    schedules=[duck_info_schedule],
+    assets=all_assets,
+    jobs=[duckdb_job],
+    schedules=[duckdb_schedule]
 )

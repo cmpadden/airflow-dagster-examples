@@ -1,7 +1,7 @@
 
 from dagster import (
-    asset, MaterializeResult, MetadataValue, define_asset_job, ScheduleDefinition,
-    Definitions, DefaultScheduleStatus, RetryPolicy
+    AssetSelection, Definitions, define_asset_job, ScheduleDefinition, asset,
+    MaterializeResult, MetadataValue, RetryPolicy
 )
 import requests
 
@@ -36,20 +36,19 @@ retry_policy = RetryPolicy(max_retries=3)
 # Define the job that includes the astronaut_messages asset with retry policy
 astronaut_job = define_asset_job(
     "astronaut_job",
-    selection=[astronaut_messages],
+    selection=AssetSelection.assets(astronaut_messages),
     op_retry_policy=retry_policy
 )
 
-# Define the schedule for the job
+# Define the schedule for the job to match the Airflow schedule "@daily"
 astronaut_schedule = ScheduleDefinition(
     job=astronaut_job,
     cron_schedule="0 0 * * *",  # At 00:00 (midnight) every day
-    default_status=DefaultScheduleStatus.RUNNING
 )
 
 # Update the Definitions object to include the job and schedule
 defs = Definitions(
     assets=[astronaut_messages],
     jobs=[astronaut_job],
-    schedules=[astronaut_schedule]
+    schedules=[astronaut_schedule],
 )
