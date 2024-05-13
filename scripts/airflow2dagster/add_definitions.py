@@ -3,42 +3,40 @@ from airflow2dagster.utils import extract_code_block_from_markdown
 from metrics.run_validity import is_runnable
 
 
-class AddScheduleSignature(dspy.Signature):
+class AddDefinitionsSignature(dspy.Signature):
     """
-    Create an asset job over the assets and add a schedule to it.
+    Combine all assets into a global `Definitions` object.
 
-    The schedule should be consistent with the Airflow code and uses `define_asset_job`.
+    Do not use the legacy `@repository` API.
     """
 
     context = dspy.InputField(desc="Potentially relevant Dagster documentation")
-    airflow_code = dspy.InputField(desc="Airflow code containing schedule")
     input_dagster_code = dspy.InputField(desc="Dagster code without schedule")
     dagster_code = dspy.OutputField(
         desc="Input Dagster code with similar schedule to Airflow code, as a single file"
     )
 
 
-class AddScheduleModule(dspy.Module):
+class AddDefinitionsModule(dspy.Module):
     def __init__(self):
         self.retrieve = dspy.Retrieve(k=3)
-        self.add_schedule = dspy.ChainOfThought(AddScheduleSignature)
+        self.add_definitions = dspy.ChainOfThought(AddDefinitionsSignature)
 
-    def forward(self, airflow_code: str, input_dagster_code: str) -> dspy.Prediction:
-        context = self.retrieve(self.add_schedule.signature.__doc__).passages
-        pred = self.add_schedule(
+    def forward(self, input_dagster_code: str) -> dspy.Prediction:
+        context = self.retrieve(self.add_definitions.signature.__doc__).passages
+        pred = self.add_definitions(
             context="\n".join(context),
-            airflow_code=airflow_code,
             input_dagster_code=input_dagster_code,
         )
         pred.dagster_code = extract_code_block_from_markdown(pred.dagster_code)
 
         dspy.Assert(
-            "define_asset_job" in pred.dagster_code,
-            "Use `define_asset_job` to create a job over the assets",
-        )
-        dspy.Assert(
             "@asset" in pred.dagster_code,
             "Do not forget to include the input Dagster code in the final code.",
+        )
+        dspy.Assert(
+            "defs = Definitions" in pred.dagster_code,
+            "All created Dagster objects should be added to a global `Definitions` object. Do not use the legacy `@repository` syntax.",
         )
         dspy.Suggest(
             *is_runnable(pred.dagster_code, verbose=True)

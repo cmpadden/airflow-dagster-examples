@@ -1,7 +1,12 @@
 
 from dagster import (
-    asset, MaterializeResult, MetadataValue, define_asset_job, ScheduleDefinition, 
-    Definitions, load_assets_from_modules, AssetSelection
+    Definitions,
+    ScheduleDefinition,
+    define_asset_job,
+    asset,
+    MaterializeResult,
+    MetadataValue,
+    DefaultScheduleStatus
 )
 import requests
 import logging
@@ -47,18 +52,22 @@ def shibe_picture_url(shibe_image_data) -> MaterializeResult:
         }
     )
 
-# Define the job that includes both assets
-shibe_job = define_asset_job("shibe_job", selection=AssetSelection.assets(shibe_image_data, shibe_picture_url))
+# Define the job
+shibe_job = define_asset_job(
+    "shibe_job",
+    selection=[shibe_image_data, shibe_picture_url]
+)
 
 # Define the schedule
 shibe_schedule = ScheduleDefinition(
     job=shibe_job,
-    cron_schedule="* * * * *",  # every minute
+    cron_schedule="*/1 * * * *",  # every minute
+    default_status=DefaultScheduleStatus.RUNNING
 )
 
-# Update the Definitions object
+# Update Definitions
 defs = Definitions(
-    assets=load_assets_from_modules([shibe_image_data, shibe_picture_url]),
+    assets=[shibe_image_data, shibe_picture_url],
     jobs=[shibe_job],
-    schedules=[shibe_schedule],
+    schedules=[shibe_schedule]
 )

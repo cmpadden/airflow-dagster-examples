@@ -1,7 +1,7 @@
 
 from dagster import (
-    asset, MaterializeResult, MetadataValue, define_asset_job, ScheduleDefinition,
-    Definitions, load_assets_from_modules, RetryPolicy
+    asset, MaterializeResult, MetadataValue, Definitions, define_asset_job,
+    ScheduleDefinition, DefaultScheduleStatus, AssetSelection, RetryPolicy
 )
 import requests
 import logging
@@ -41,19 +41,20 @@ def bitcoin_market_data() -> MaterializeResult:
 retry_policy = RetryPolicy(max_retries=2)
 bitcoin_job = define_asset_job(
     "bitcoin_job",
-    selection=["bitcoin_market_data"],
+    selection=AssetSelection.assets(bitcoin_market_data),
     op_retry_policy=retry_policy
 )
 
 # Define the schedule
 bitcoin_schedule = ScheduleDefinition(
     job=bitcoin_job,
-    cron_schedule="0 0 * * *",  # every day at midnight
+    cron_schedule="0 0 * * *",  # Daily at midnight
+    default_status=DefaultScheduleStatus.RUNNING
 )
 
-# Define the Definitions object
+# Add to Definitions
 defs = Definitions(
-    assets=load_assets_from_modules([__name__]),
+    assets=[bitcoin_market_data],
     jobs=[bitcoin_job],
-    schedules=[bitcoin_schedule],
+    schedules=[bitcoin_schedule]
 )

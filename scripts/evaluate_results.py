@@ -151,7 +151,7 @@ def build_supervised_leaderboard():
 
     gpt_dspy_metrics = _evaluate(references=references, candidates=gpt_dspy)
     gpt_dspy_metrics["source"] = "gpt_dspy"
-    breakpoint()
+
     supervised_leaderboard = pd.concat(
         [just_copy_airflow_metrics, human_metrics, gpt_naive_metrics, gpt_dspy_metrics],
         ignore_index=True,

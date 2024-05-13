@@ -51,3 +51,5 @@ if __name__ == "__main__":
 
 # TODO: Handle resources and IO managers
 # TODO: Handle inputs using Configs
+# TODO: Handle sensors
+# TODO: Toggle the ability to check whether code is runnable
