@@ -32,7 +32,7 @@ def create_chain() -> RunnableSerializable[dict, str]:
     """
 
     prompt = PromptTemplate.from_template(template=template)
-    model = ChatOpenAI(model="gpt-4o-2024-05-13", temperature=0)
+    model = ChatOpenAI(model="gpt-4o", temperature=0)
     chain = prompt | model | StrOutputParser()
     return chain
 

@@ -9,7 +9,7 @@ from dspy.retrieve.chromadb_rm import ChromadbRM
 
 
 def configure_dspy() -> None:
-    turbo = dspy.OpenAI(model="gpt-4o-2024-05-13", max_tokens=2048)
+    turbo = dspy.OpenAI(model="gpt-4o", max_tokens=2048)
 
     embedding_function = OpenAIEmbeddingFunction(api_key=os.getenv("OPENAI_API_KEY"))
     retriever_model = ChromadbRM(
