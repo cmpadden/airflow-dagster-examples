@@ -39,7 +39,7 @@ def get_translator(retries: int | None) -> Model:
         for name, submodule in model.named_sub_modules():
             # Only wrap direct submodules of the `Model` with assertions
             # There'll be a deadlock if (sub)modules of different levels are wrapped
-            # NOTE: Submodules are named as `self.<submodule_name>.<subsubmodule_name>``
+            # NOTE: Submodules are named as `self.<submodule_name>.<subsubmodule_name>`
             if len(name.split('.')) != 2:
                 continue
             submodule.activate_assertions(
