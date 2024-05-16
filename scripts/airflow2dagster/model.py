@@ -41,8 +41,10 @@ def get_translator(retries: int | None) -> Model:
     model = Model()
     if retries:
         for name, submodule in model.named_sub_modules():
-            # Do not wrap main module with assertions, as it'll encounter a deadlock
-            if name == "self":
+            # Only wrap direct submodules of the `Model` with assertions
+            # There'll be a deadlock if (sub)modules of different levels are wrapped
+            # NOTE: Submodules are named as `self.<submodule_name>.<subsubmodule_name>`
+            if len(name.split('.')) != 2:
                 continue
             submodule.activate_assertions(
                 partial(backtrack_handler, max_backtracks=retries)
