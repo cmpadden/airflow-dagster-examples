@@ -1,19 +1,13 @@
 
-from dagster import (
-    Definitions,
-    ScheduleDefinition,
-    define_asset_job,
-    asset,
-    MaterializeResult,
-    MetadataValue,
-    DefaultScheduleStatus
-)
+from dagster import Definitions, asset, MaterializeResult, MetadataValue
 import requests
 import logging
 
 @asset
 def shibe_image_data() -> MaterializeResult:
-    """ Fetches shibe image data from the API and returns it with metadata. """
+    """
+    Fetches shibe image data from the API and returns it with metadata.
+    """
     try:
         response = requests.get("http://shibe.online/api/shibes?count=1&urls=true")
         response.raise_for_status()  # Raises an HTTPError for bad responses
@@ -36,7 +30,9 @@ def shibe_image_data() -> MaterializeResult:
 
 @asset
 def shibe_picture_url(shibe_image_data) -> MaterializeResult:
-    """ Extracts and returns the shibe picture URL from the image data with metadata. """
+    """
+    Extracts and returns the shibe picture URL from the image data with metadata.
+    """
     if shibe_image_data:
         url = shibe_image_data[0]
         return MaterializeResult(
@@ -52,22 +48,6 @@ def shibe_picture_url(shibe_image_data) -> MaterializeResult:
         }
     )
 
-# Define the job
-shibe_job = define_asset_job(
-    "shibe_job",
-    selection=[shibe_image_data, shibe_picture_url]
-)
-
-# Define the schedule
-shibe_schedule = ScheduleDefinition(
-    job=shibe_job,
-    cron_schedule="*/1 * * * *",  # every minute
-    default_status=DefaultScheduleStatus.RUNNING
-)
-
-# Update Definitions
 defs = Definitions(
-    assets=[shibe_image_data, shibe_picture_url],
-    jobs=[shibe_job],
-    schedules=[shibe_schedule]
+    assets=[shibe_image_data, shibe_picture_url]
 )
