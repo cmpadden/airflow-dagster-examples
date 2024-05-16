@@ -2,7 +2,7 @@ import dspy
 from airflow2dagster.utils import extract_code_block_from_markdown
 from metrics.run_validity import is_runnable
 
-
+# TODO: Prompt the model to not translate Airflow code if it's a sensor
 class TranslateCoreLogicSignature(dspy.Signature):
     """
     Translate the core logic in the Airflow code into Dagster code.
@@ -17,6 +17,7 @@ class TranslateCoreLogicSignature(dspy.Signature):
         - Asset materialization metadata
         - Data quality checks
         - Schedule, sensors, resources, io managers, definitions
+        - Skip translating any Airflow sensors
     """
 
     airflow_code = dspy.InputField()
