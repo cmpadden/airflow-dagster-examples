@@ -1,65 +1,74 @@
+from airflow.io.path import ObjectStoragePath
 from dagster import (
-    Definitions,
-    define_asset_job,
-    ScheduleDefinition,
     AssetSelection,
-    DefaultScheduleStatus,
+    Definitions,
+    ScheduleDefinition,
+    asset,
+    define_asset_job,
 )
-from pathlib import Path
-import shutil
-import os
 from pydantic import Field
-from dagster import asset, Config, MaterializeResult, MetadataValue
 
 
-class TransferAndReadPoemsConfig(Config):
-    object_storage: str = Field(default="s3", description="Type of object storage")
-    conn_id: str = Field(
-        default="aws_s3_webinar_conn", description="Connection ID for AWS S3"
+class ListedFilesConfig:
+    base_path: str = Field(
+        default="file://data/poems/", description="Base path for listing files"
     )
-    path: str = Field(default="ce-2-8-examples-bucket", description="Bucket path in S3")
-    local_storage_path: str = Field(
-        default="/include/poems/", description="Local storage path for poems"
+
+
+class CopiedFilesConfig:
+    destination_path: str = Field(
+        default="file://include/poems/",
+        description="Destination path for copying files",
     )
 
 
 @asset
-def transfer_and_read_poems(config: TransferAndReadPoemsConfig) -> MaterializeResult:
-    """Transfer poem files from remote S3 storage to local storage and read their contents.
-    Returns:
-        MaterializeResult: Contains the list of contents of each poem file and metadata.
-    """
-    remote_path = Path(f"{config.object_storage}://{config.path}/poems")
-    local_path = Path(config.local_storage_path)
-    local_path.mkdir(parents=True, exist_ok=True)
+def listed_files(config: ListedFilesConfig) -> list[ObjectStoragePath]:
+    """Asset representing the list of files in remote object storage."""
+    base_path = ObjectStoragePath(config.base_path)
+    path = base_path / "poems/"
+    files = [f for f in path.iterdir() if f.is_file()]
+    return files
+
+
+@asset
+def copied_files(files: list[ObjectStoragePath], config: CopiedFilesConfig):
+    """Asset representing files copied from remote to local storage."""
+    destination_path = ObjectStoragePath(config.destination_path)
+    for file in files:
+        file.copy(dst=destination_path)
+
+
+@asset
+def file_contents(files: list[ObjectStoragePath]) -> list[str]:
+    """Asset representing the content of files read from remote storage."""
     contents = []
-    poem_names = []
-    for file in os.listdir(remote_path):
-        local_file_path = local_path / file
-        shutil.copy(remote_path / file, local_file_path)
-        with open(local_file_path, "r", encoding="utf-8") as f:
-            contents.append(f.read())
-        poem_names.append(file)
-    # Metadata about the number of poems and their names
-    metadata = {
-        "number_of_poems": MetadataValue.int(len(poem_names)),
-        "poem_names": MetadataValue.json(poem_names),
-    }
-    return MaterializeResult(contents, metadata)
+    for file in files:
+        bytes = file.read_block(offset=0, length=None)
+        text = bytes.decode("utf-8")
+        contents.append(text)
+    return contents
 
 
-# Define a job that will materialize the assets
-poems_job = define_asset_job(
-    "poems_job", selection=AssetSelection.assets(transfer_and_read_poems)
+# Define dependencies between assets
+copied_files(listed_files(ListedFilesConfig()), CopiedFilesConfig())
+file_contents(listed_files(ListedFilesConfig()))
+
+# Define the asset job
+asset_job = define_asset_job(
+    "object_storage_job",
+    selection=AssetSelection.assets(listed_files, copied_files, file_contents),
 )
 
-# Define a schedule that runs the job every Sunday at midnight
-poems_schedule = ScheduleDefinition(
-    job=poems_job,
-    cron_schedule="0 0 * * 0",  # every Sunday at midnight
-    default_status=DefaultScheduleStatus.RUNNING,
+# Define the schedule for the job
+job_schedule = ScheduleDefinition(
+    job=asset_job,
+    cron_schedule="0 0 * * 0",  # Every Sunday at midnight
 )
 
+# Create Definitions object with assets, job, and schedule
 defs = Definitions(
-    assets=[transfer_and_read_poems], jobs=[poems_job], schedules=[poems_schedule]
+    assets=[listed_files, copied_files, file_contents],
+    schedules=[job_schedule],
+    jobs=[asset_job],
 )
