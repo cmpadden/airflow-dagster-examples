@@ -1,17 +1,19 @@
-
 from dagster import Definitions, asset, Config, MaterializeResult, MetadataValue
 import requests
 import logging
 from pydantic import Field
 
+
 class ShibeImageDataConfig(Config):
-    api_url: str = Field(default="http://shibe.online/api/shibes?count=1&urls=true", description="API URL to fetch shibe images")
+    api_url: str = Field(
+        default="http://shibe.online/api/shibes?count=1&urls=true",
+        description="API URL to fetch shibe images",
+    )
+
 
 @asset
 def shibe_image_data(config: ShibeImageDataConfig) -> MaterializeResult:
-    """
-    Fetches shibe image data from the API and returns it with metadata.
-    """
+    """Fetches shibe image data from the API and returns it with metadata."""
     try:
         response = requests.get(config.api_url)
         response.raise_for_status()  # Raises an HTTPError for bad responses
@@ -20,49 +22,27 @@ def shibe_image_data(config: ShibeImageDataConfig) -> MaterializeResult:
             value=data,
             metadata={
                 "status_code": MetadataValue.int(response.status_code),
-                "url_requested": MetadataValue.text(response.url)
-            }
+                "url_requested": MetadataValue.text(response.url),
+            },
         )
     except requests.RequestException as e:
         logging.error(f"Failed to fetch shibe image data: {e}")
         return MaterializeResult(
-            value=None,
-            metadata={
-                "error": MetadataValue.text(str(e))
-            }
+            value=None, metadata={"error": MetadataValue.text(str(e))}
         )
+
 
 @asset
 def shibe_picture_url(shibe_image_data) -> MaterializeResult:
-    """
-    Extracts and returns the shibe picture URL from the image data with metadata.
-    """
+    """Extracts and returns the shibe picture URL from the image data with metadata."""
     if shibe_image_data:
         url = shibe_image_data[0]
         return MaterializeResult(
-            value=url,
-            metadata={
-                "picture_url": MetadataValue.url(url)
-            }
+            value=url, metadata={"picture_url": MetadataValue.url(url)}
         )
     return MaterializeResult(
-        value=shibe_url,
-        metadata={"condition_met": MetadataValue.bool(condition_met)}
+        value=None, metadata={"error": MetadataValue.text("No image data available")}
     )
 
-@asset(ins={"shibe_picture_url": AssetIn()})
-def display_shibe_picture_url(context: AssetExecutionContext, shibe_picture_url):
-    """Logs the Shibe picture URL if available."""
-    if shibe_picture_url:
-        context.log.info(f"Shibe picture URL: {shibe_picture_url[0]}")
-    else:
-        context.log.warning("No URL available")
 
-from dagster import Definitions
-
-defs = Definitions(
-    assets=[
-        shibe_image_data,
-        shibe_picture_url,
-    ]
-)
+defs = Definitions(assets=[shibe_image_data, shibe_picture_url])
