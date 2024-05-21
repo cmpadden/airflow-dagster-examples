@@ -1,41 +1,60 @@
 
-from dagster import Definitions, asset, define_asset_job, ScheduleDefinition, RetryPolicy
-from dagster_aws.s3 import S3PickleIOManager, S3Resource
+from dagster import asset, Config, MaterializeResult, MetadataValue, Definitions, define_asset_job, ScheduleDefinition, AssetSelection, RetryPolicy
+import os
+import subprocess
+import time
+from pydantic import Field
+from typing import List
 
-# Define assets
+class DBTConfig(Config):
+    dbt_profiles_dir: str = Field(default='/path/to/profiles', description='Directory where DBT profiles are stored')
+    dbt_project_dir: str = Field(default='/usr/local/airflow/dags/dbt', description='DBT project directory')
+    dbt_profile: str = Field(default='default', description='DBT profile name')
+    dbt_target: str = Field(default='dev', description='DBT target environment')
+    dbt_args: List[str] = Field(default_factory=lambda: ['run'], description='Additional DBT command line arguments')
+
 @asset
-def dagster_github_issues():
-    # Logic to fetch and process GitHub issues
-    pass
+def dbt_project_execution(config: DBTConfig) -> MaterializeResult:
+    # Set up the environment variables for DBT
+    os.environ['DBT_PROFILES_DIR'] = config.dbt_profiles_dir
+    # Prepare DBT arguments
+    dbt_args = config.dbt_args + [
+        '--project-dir', config.dbt_project_dir,
+        '--profile', config.dbt_profile,
+        '--target', config.dbt_target
+    ]
+    # Capture the start time
+    start_time = time.time()
+    # Execute the DBT project and capture the output
+    result = subprocess.run(['dbt'] + dbt_args, capture_output=True, text=True)
+    # Calculate execution time
+    execution_time = time.time() - start_time
+    # Prepare metadata
+    metadata = {
+        "execution_time": MetadataValue.float(execution_time),
+        "output_log": MetadataValue.md(result.stdout)
+    }
+    return MaterializeResult(metadata=metadata)
 
-@asset
-def dagster_github_pull_requests():
-    # Logic to fetch and process GitHub pull requests
-    pass
+# Define the retry policy
+retry_policy = RetryPolicy(max_retries=2)
 
-# Define resources
-s3_resource = S3Resource()
-s3_pickle_io_manager = S3PickleIOManager(s3_resource=s3_resource, s3_bucket="my-dagster-bucket")
-
-# Define a job that includes all assets with a retry policy
-retry_policy = RetryPolicy(max_retries=2)  # Retry up to 2 times
-all_assets_job = define_asset_job(
-    "all_assets_job",
-    selection=[dagster_github_issues, dagster_github_pull_requests],
+# Define the job with retry policy
+dbt_job = define_asset_job(
+    "dbt_job",
+    selection=AssetSelection.assets(dbt_project_execution),
     op_retry_policy=retry_policy
 )
 
-# Define a schedule for the job
-daily_schedule = ScheduleDefinition(
-    job=all_assets_job,
-    cron_schedule="0 0 * * *",  # Run daily at midnight
-    name="daily_asset_refresh"
+# Define the schedule
+dbt_schedule = ScheduleDefinition(
+    job=dbt_job,
+    cron_schedule="0 0 * * *",  # Daily at midnight
 )
 
-# Combine all assets, resources, job, and schedule into a Definitions object
+# Update Definitions object
 defs = Definitions(
-    assets=[dagster_github_issues, dagster_github_pull_requests],
-    resources={"s3_io_manager": s3_pickle_io_manager},
-    jobs=[all_assets_job],
-    schedules=[daily_schedule]
+    assets=[dbt_project_execution],
+    jobs=[dbt_job],
+    schedules=[dbt_schedule],
 )

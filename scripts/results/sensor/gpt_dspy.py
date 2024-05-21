@@ -1,15 +1,19 @@
 
-from dagster import Definitions, asset, MaterializeResult, MetadataValue
+from dagster import Definitions, asset, Config, MaterializeResult, MetadataValue
 import requests
 import logging
+from pydantic import Field
+
+class ShibeImageDataConfig(Config):
+    api_url: str = Field(default="http://shibe.online/api/shibes?count=1&urls=true", description="API URL to fetch shibe images")
 
 @asset
-def shibe_image_data() -> MaterializeResult:
+def shibe_image_data(config: ShibeImageDataConfig) -> MaterializeResult:
     """
     Fetches shibe image data from the API and returns it with metadata.
     """
     try:
-        response = requests.get("http://shibe.online/api/shibes?count=1&urls=true")
+        response = requests.get(config.api_url)
         response.raise_for_status()  # Raises an HTTPError for bad responses
         data = response.json()
         return MaterializeResult(
@@ -49,5 +53,8 @@ def shibe_picture_url(shibe_image_data) -> MaterializeResult:
     )
 
 defs = Definitions(
-    assets=[shibe_image_data, shibe_picture_url]
+    assets=[
+        shibe_image_data,
+        shibe_picture_url,
+    ]
 )

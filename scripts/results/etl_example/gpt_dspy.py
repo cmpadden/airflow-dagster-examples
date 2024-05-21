@@ -1,17 +1,19 @@
 
-from dagster import (
-    asset, MaterializeResult, MetadataValue, Definitions, define_asset_job,
-    ScheduleDefinition, DefaultScheduleStatus, AssetSelection, RetryPolicy
-)
+from dagster import asset, Config, MaterializeResult, MetadataValue, Definitions, ScheduleDefinition, define_asset_job, RetryPolicy
 import requests
 import logging
 import json
+from pydantic import Field
 
-API_URL = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true"
+class BitcoinMarketDataConfig(Config):
+    api_url: str = Field(
+        default="https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24h_change=true&include_last_updated_at=true",
+        description="API URL to fetch Bitcoin market data"
+    )
 
-def fetch_bitcoin_data():
+def fetch_bitcoin_data(api_url: str):
     try:
-        response = requests.get(API_URL)
+        response = requests.get(api_url)
         response.raise_for_status()  # Raises an HTTPError for bad responses
         return response.json()["bitcoin"]
     except requests.RequestException as e:
@@ -19,8 +21,8 @@ def fetch_bitcoin_data():
         return None
 
 @asset(name="bitcoin_market_data")
-def bitcoin_market_data() -> MaterializeResult:
-    bitcoin_data = fetch_bitcoin_data()
+def bitcoin_market_data(config: BitcoinMarketDataConfig) -> MaterializeResult:
+    bitcoin_data = fetch_bitcoin_data(config.api_url)
     if bitcoin_data is None:
         return MaterializeResult(metadata={"error": MetadataValue.text("Failed to fetch data")})
     processed_data = {
@@ -37,8 +39,10 @@ def bitcoin_market_data() -> MaterializeResult:
     }
     return MaterializeResult(output=processed_data, metadata=metadata_entries)
 
-# Define the job with retry policy
+# Define the retry policy
 retry_policy = RetryPolicy(max_retries=2)
+
+# Define the job with retry policy
 bitcoin_job = define_asset_job(
     "bitcoin_job",
     selection=AssetSelection.assets(bitcoin_market_data),
@@ -48,11 +52,10 @@ bitcoin_job = define_asset_job(
 # Define the schedule
 bitcoin_schedule = ScheduleDefinition(
     job=bitcoin_job,
-    cron_schedule="0 0 * * *",  # Daily at midnight
-    default_status=DefaultScheduleStatus.RUNNING
+    cron_schedule="0 0 * * *",  # every day at midnight
 )
 
-# Add to Definitions
+# Update Definitions
 defs = Definitions(
     assets=[bitcoin_market_data],
     jobs=[bitcoin_job],
