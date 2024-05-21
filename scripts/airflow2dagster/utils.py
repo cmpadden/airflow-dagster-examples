@@ -1,8 +1,10 @@
 import os
-
-from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
+import subprocess
+import tempfile
+from pathlib import Path
 
 import dspy
+from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 from dspy.retrieve.chromadb_rm import ChromadbRM
 
 
@@ -25,3 +27,22 @@ def extract_code_block_from_markdown(markdown_string: str) -> str:
     if "```" not in markdown_string:
         return markdown_string
     return markdown_string.split("```")[1].removeprefix("python")
+
+
+def format_code(code: str) -> str:
+    """Formats the code using Ruff."""
+
+    with tempfile.NamedTemporaryFile() as fp:
+        Path(fp.name).write_text(code)
+
+        # Run Ruff via the CLI
+        subprocess.run(
+            ["ruff", "check", "--fix", fp.name], capture_output=True, text=True, check=True
+        )
+        subprocess.run(
+            ["ruff", "format", fp.name], capture_output=True, text=True, check=True
+        )
+
+        formatted_code = Path(fp.name).read_text()
+
+    return formatted_code
