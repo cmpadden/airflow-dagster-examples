@@ -27,6 +27,8 @@ class AddScheduleSignature(dspy.Signature):
     Create an asset job over the assets and add a schedule to it.
 
     The schedule should be consistent with the Airflow code and uses `define_asset_job`.
+
+    Do not modify the input code.
     """
 
     context = dspy.InputField(desc="Potentially relevant Dagster documentation")
