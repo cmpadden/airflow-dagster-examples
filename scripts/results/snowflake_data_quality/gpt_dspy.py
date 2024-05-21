@@ -1,26 +1,30 @@
 
-from dagster import asset, MaterializeResult, MetadataValue, Definitions
+from dagster import asset, Config, MaterializeResult, MetadataValue, Definitions
 import pandas as pd
-import datetime
+from pydantic import Field
+from typing import List
 
-# Define the assets with the necessary input definitions
-@asset(required_resource_keys={"io_manager"})
-def trip_data_preparation_and_upload(context, file_path: str, upload_date: datetime.date) -> MaterializeResult:
+class TripDataPreparationConfig(Config):
+    file_path: str
+    upload_date: str  # Changed from datetime.date to str to comply with Dagster's config type requirements
+
+@asset
+def trip_data_preparation_and_upload(config: TripDataPreparationConfig) -> MaterializeResult:
     """
     Prepares trip data by reading from a CSV, adding an 'upload_date' column, and saving it.
     """
-    trip_data = pd.read_csv(file_path, header=0, parse_dates=["pickup_datetime"], infer_datetime_format=True)
-    trip_data["upload_date"] = upload_date
-    trip_data.to_csv(file_path, header=True, index=False)
+    trip_data = pd.read_csv(config.file_path, header=0, parse_dates=["pickup_datetime"], infer_datetime_format=True)
+    trip_data["upload_date"] = pd.to_datetime(config.upload_date)  # Convert string back to datetime for processing
+    trip_data.to_csv(config.file_path, header=True, index=False)
     record_count = len(trip_data)
     metadata = {
         "records_processed": MetadataValue.int(record_count),
-        "upload_date": MetadataValue.text(str(upload_date))
+        "upload_date": MetadataValue.text(str(config.upload_date))
     }
-    return MaterializeResult(output=file_path, metadata=metadata)
+    return MaterializeResult(output=config.file_path, metadata=metadata)
 
-@asset(required_resource_keys={"io_manager"})
-def snowflake_resources_setup_and_cleanup(context) -> MaterializeResult:
+@asset
+def snowflake_resources_setup_and_cleanup() -> MaterializeResult:
     """
     Manages Snowflake resources by creating and cleaning up tables and stages.
     """
@@ -31,8 +35,8 @@ def snowflake_resources_setup_and_cleanup(context) -> MaterializeResult:
     metadata = {"operation_status": MetadataValue.text(success_message)}
     return MaterializeResult(metadata=metadata)
 
-@asset(required_resource_keys={"io_manager"})
-def trip_data_loading_and_quality_checks(context, prepared_tripdata: str, snowflake_resources_setup_and_cleanup: MaterializeResult) -> MaterializeResult:
+@asset
+def trip_data_loading_and_quality_checks(prepared_tripdata, snowflake_resources_setup_and_cleanup) -> MaterializeResult:
     """
     Loads trip data from S3 to Snowflake and performs data quality checks.
     """
@@ -48,23 +52,10 @@ def trip_data_loading_and_quality_checks(context, prepared_tripdata: str, snowfl
     }
     return MaterializeResult(metadata=metadata)
 
-# Define the resources
-from dagster import ResourceDefinition
-
-def io_manager():
-    # Placeholder for actual I/O manager logic
-    pass
-
-io_manager_resource = ResourceDefinition(resource_fn=io_manager)
-
-# Combine all assets into a Definitions object
 defs = Definitions(
     assets=[
         trip_data_preparation_and_upload,
         snowflake_resources_setup_and_cleanup,
         trip_data_loading_and_quality_checks
-    ],
-    resources={
-        "io_manager": io_manager_resource
-    }
+    ]
 )

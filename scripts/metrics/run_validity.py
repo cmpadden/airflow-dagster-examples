@@ -2,7 +2,11 @@
 def is_runnable(source_code: str, verbose: bool = False) -> bool:
     try:
         compiled_code = compile(source_code, "<string>", "exec")
-        exec(compiled_code)
+
+        # Explicitly provide an empty global context,
+        # otherwise source code `import` statements won't work
+        exec(compiled_code, {})
+
         if verbose:
             return True, ""
         return True
