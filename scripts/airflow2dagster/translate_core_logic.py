@@ -63,6 +63,11 @@ class TranslateCoreLogicModule(dspy.Module):
         pred = self.asset_consolidator(input_dagster_code=pred.dagster_code)
         pred.dagster_code = extract_code_block_from_markdown(pred.dagster_code)
 
+        dspy.Assert(
+            "@job" not in pred.dagster_code and "@op" not in pred.dagster_code,
+            "The code should not contain @job or @op",
+        )
+
         dspy.Suggest(
             fewer_assets_than_tasks(airflow_code, pred.dagster_code),
             "The number of Dagster assets should be fewer than the number of Airflow tasks",
