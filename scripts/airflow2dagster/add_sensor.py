@@ -156,14 +156,14 @@ def my_directory_sensor_with_skip_reasons():
 
 class AddSensorSignature(dspy.Signature):
     """
-    Translate a sensor in the Airflow code and add it to the input Dagster code.
+    Translate sensors in the Airflow code and add it to the Dagster code's `Definitions`.
 
-    You can replace any Dagster `@asset` with `@sensor` as appropriate, based on the Airflow code.
+    Keep the input Dagster code intact — only translate and add the sensor(s) to the `Definitions` object.
     """
 
     context = dspy.InputField(desc="Potentially relevant Dagster documentation")
     airflow_code = dspy.InputField(desc="Airflow code containing a sensor")
-    input_dagster_code = dspy.InputField(desc="Dagster code without a sensor")
+    input_dagster_code = dspy.InputField(desc="Equivalent Dagster code without a sensor")
     dagster_code = dspy.OutputField(
         desc="Input Dagster code with similar sensor behaviour to Airflow code"
     )
@@ -198,7 +198,7 @@ class AddSensorModule(dspy.Module):
             input_dagster_code=input_dagster_code,
         )
         pred.dagster_code = extract_code_block_from_markdown(pred.dagster_code)
-        breakpoint()
+
         dspy.Assert(
             "@asset" in pred.dagster_code,
             "Do not forget to include the input Dagster code in the final code.",
