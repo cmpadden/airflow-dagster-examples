@@ -29,9 +29,28 @@ class AddScheduleSignature(dspy.Signature):
     The schedule should be consistent with the Airflow code and uses `define_asset_job`.
 
     Do not modify the input code.
+
+    Example:
+        from dagster import asset, define_asset_job, AssetSelection, ScheduleDefinition, Definitions
+
+        @asset
+        def my_asset():
+            ...
+
+        asset_job = define_asset_job("my_asset_job", AssetSelection.assets(my_asset))
+
+        job_schedule = ScheduleDefinition(
+            job=asset_job,
+            cron_schedule="0 0 * * *",
+        )
+
+        definitions = Definitions(
+            assets=[my_asset],
+            schedules=[job_schedule],
+            jobs=[asset_job]
+        )
     """
 
-    context = dspy.InputField(desc="Potentially relevant Dagster documentation")
     airflow_code = dspy.InputField(desc="Airflow code containing schedule")
     input_dagster_code = dspy.InputField(desc="Dagster code without schedule")
     dagster_code = dspy.OutputField(
@@ -41,7 +60,6 @@ class AddScheduleSignature(dspy.Signature):
 
 class AddScheduleModule(dspy.Module):
     def __init__(self):
-        self.retrieve = dspy.Retrieve(k=3)
         self.detect_schedule = dspy.TypedPredictor(DetectScheduleSignature)
         self.add_schedule = dspy.ChainOfThought(AddScheduleSignature)
 
@@ -52,10 +70,7 @@ class AddScheduleModule(dspy.Module):
             )
             return dspy.Prediction(dagster_code=input_dagster_code)
 
-        context = self.retrieve(self.add_schedule.signature.__doc__).passages
-
         pred = self.add_schedule(
-            context="\n".join(context),
             airflow_code=airflow_code,
             input_dagster_code=input_dagster_code,
         )
