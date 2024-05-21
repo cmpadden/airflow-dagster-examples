@@ -103,11 +103,11 @@ def _evaluate(references: list[Reference], candidates: list[Path]) -> pd.DataFra
 
 
 def read_reference_files(result_folder: Path) -> list[Reference]:
-    subfolders = [
+    subfolders = sorted([
         folder
         for folder in result_folder.iterdir()
         if folder.is_dir() and folder.name not in ("data", ".git", "scripts")
-    ]
+    ])
 
     samples = []
     for folder in subfolders:
@@ -124,7 +124,7 @@ def read_reference_files(result_folder: Path) -> list[Reference]:
 
 
 def read_files(filename_pattern: str, directory: Path) -> list[Path]:
-    return [f for f in directory.rglob("**/" + filename_pattern)]
+    return sorted([f for f in directory.rglob("**/" + filename_pattern)])
 
 
 @app.command()

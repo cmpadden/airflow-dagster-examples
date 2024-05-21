@@ -54,11 +54,11 @@ def generate_gpt_naive(airflow_code: str) -> str:
 
 @app.command()
 def cli_generate():
-    subfolders = [
+    subfolders = sorted([
         folder
         for folder in Path("..").iterdir()
         if folder.is_dir() and folder.name not in ("data", ".git", "scripts")
-    ]
+    ])
 
     results_root = Path("./results")
 
