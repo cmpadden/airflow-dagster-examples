@@ -10,17 +10,13 @@ Please add it to your `.env` file.
 poetry run python -m airflow2dagster --airflow-filepath "../<path-to-airflow-file>"
 ```
 
-
-## Generate translations for all examples
+## Update the leaderboard
 ```sh
-poetry run python generate.py cli-generate
+make leaderboard
 ```
 
-
-## Evaluate
-```sh
-poetry run python evaluate_results.py build-supervised-leaderboard
-```
+This command first re-generates translations for all examples.
+After that, the translations are evaluated and the leaderboard is updated.
 
 
 ## How to add more solution:
