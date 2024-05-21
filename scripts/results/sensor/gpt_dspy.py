@@ -3,14 +3,17 @@ import requests
 import logging
 from pydantic import Field
 
+
 class ShibeImageDataConfig(Config):
-    api_url: str = Field(default="http://shibe.online/api/shibes?count=1&urls=true", description="API URL to fetch shibe images")
+    api_url: str = Field(
+        default="http://shibe.online/api/shibes?count=1&urls=true",
+        description="API URL to fetch shibe images",
+    )
+
 
 @asset
 def shibe_image_data(config: ShibeImageDataConfig) -> MaterializeResult:
-    """
-    Fetches shibe image data from the API and returns it with metadata.
-    """
+    """Fetches shibe image data from the API and returns it with metadata."""
     try:
         response = requests.get(config.api_url)
         response.raise_for_status()  # Raises an HTTPError for bad responses
@@ -41,9 +44,5 @@ def shibe_picture_url(shibe_image_data) -> MaterializeResult:
         value=None, metadata={"error": MetadataValue.text("No image data available")}
     )
 
-defs = Definitions(
-    assets=[
-        shibe_image_data,
-        shibe_picture_url,
-    ]
-)
+
+defs = Definitions(assets=[shibe_image_data, shibe_picture_url])
