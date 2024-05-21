@@ -1,72 +1,68 @@
+import requests
 from dagster import (
-    asset,
+    AssetSelection,
     Config,
+    Definitions,
     MaterializeResult,
     MetadataValue,
-    Definitions,
-    define_asset_job,
-    ScheduleDefinition,
-    AssetSelection,
     RetryPolicy,
+    ScheduleDefinition,
+    asset,
+    define_asset_job,
 )
-import requests
 from pydantic import Field
 
 
-class AstronautMessagesConfig(Config):
+class AstronautsConfig(Config):
     api_url: str = Field(
         default="http://api.open-notify.org/astros.json",
-        description="API URL for fetching astronaut data",
+        description="API URL for fetching astronauts currently in space",
     )
 
 
 @asset
-def astronaut_messages(config: AstronautMessagesConfig) -> MaterializeResult:
+def astronauts_in_space(config: AstronautsConfig) -> MaterializeResult:
     """
-    Fetches data about astronauts currently in space from the Open Notify API and creates a descriptive message for each astronaut.
-    Returns:
-    MaterializeResult: Descriptive messages about each astronaut with metadata.
+    This asset fetches the list of astronauts currently in space from the Open Notify API, raises an error for bad responses, and attaches metadata including the total number of astronauts and their respective crafts.
     """
     response = requests.get(config.api_url)
-    response.raise_for_status()  # Proper error handling
+    response.raise_for_status()  # Raises an HTTPError for bad responses
     astronauts = response.json()["people"]
-    messages = []
-    for astronaut in astronauts:
-        name = astronaut["name"]
-        craft = astronaut["craft"]
-        message = f"{name} is currently in space flying on the {craft}! Hello! :)"
-        messages.append(message)
-        print(message)  # Print each message as a side effect
+    astronaut_count = len(astronauts)
+    crafts = {astronaut["name"]: astronaut["craft"] for astronaut in astronauts}
 
-    # Metadata to include the number of astronauts and a sample message
-    metadata = {
-        "total_astronauts": MetadataValue.int(len(astronauts)),
-        "sample_message": MetadataValue.text(
-            messages[0] if messages else "No astronauts currently in space."
-        ),
+    # Print each astronaut's name and their flying craft
+    for name, craft in crafts.items():
+        print(f"{name} is currently in space flying on the {craft}! Hello! :)")
+
+    # Create metadata entries
+    metadata_entries = {
+        "total_astronauts": MetadataValue.int(astronaut_count),
+        "crafts": MetadataValue.json(crafts),
     }
-    return MaterializeResult(output=messages, metadata=metadata)
+
+    # Return the result with metadata
+    return MaterializeResult(metadata=metadata_entries)
 
 
 # Define the retry policy
 retry_policy = RetryPolicy(max_retries=3)
 
-# Define the job that includes the astronaut_messages asset with retry policy
-astronaut_job = define_asset_job(
-    "astronaut_job",
-    selection=AssetSelection.assets(astronaut_messages),
+# Define the asset job with retry policy
+asset_job = define_asset_job(
+    "daily_astronauts_job",
+    selection=AssetSelection.assets(astronauts_in_space),
     op_retry_policy=retry_policy,
 )
 
-# Define a schedule for the astronaut_job to run daily
-astronaut_schedule = ScheduleDefinition(
-    job=astronaut_job,
-    cron_schedule="0 0 * * *",  # At 00:00 (midnight) every day
+# Define the schedule for the job
+job_schedule = ScheduleDefinition(
+    job=asset_job,
+    cron_schedule="0 0 * * *",  # Daily at midnight
+    name="daily_astronauts_schedule",
 )
 
-# Add the job and schedule to the Definitions object
-defs = Definitions(
-    assets=[astronaut_messages],
-    jobs=[astronaut_job],
-    schedules=[astronaut_schedule],
+# Define the Dagster definitions including assets, jobs, and schedules
+definitions = Definitions(
+    assets=[astronauts_in_space], jobs=[asset_job], schedules=[job_schedule]
 )

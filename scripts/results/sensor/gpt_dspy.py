@@ -1,48 +1,70 @@
-from dagster import Definitions, asset, Config, MaterializeResult, MetadataValue
-import requests
 import logging
+
+import requests
+from dagster import (
+    Config,
+    Definitions,
+    MaterializeResult,
+    MetadataValue,
+    RunRequest,
+    asset,
+    job,
+    sensor,
+)
 from pydantic import Field
 
+logger = logging.getLogger(__name__)
 
-class ShibeImageDataConfig(Config):
+
+class ShibePictureConfig(Config):
     api_url: str = Field(
-        default="http://shibe.online/api/shibes?count=1&urls=true",
-        description="API URL to fetch shibe images",
+        default="http://shibe.online/api/shibes", description="API base URL"
     )
+    count: int = Field(default=1, description="Number of Shibe pictures to fetch")
+    urls: bool = Field(default=True, description="Whether to fetch URLs only")
 
 
-@asset
-def shibe_image_data(config: ShibeImageDataConfig) -> MaterializeResult:
-    """Fetches shibe image data from the API and returns it with metadata."""
+@asset(name="shibe_picture")
+def shibe_picture_url(config: ShibePictureConfig) -> MaterializeResult:
     try:
-        response = requests.get(config.api_url)
+        response = requests.get(
+            f"{config.api_url}?count={config.count}&urls={config.urls}"
+        )
         response.raise_for_status()  # Raises an HTTPError for bad responses
-        data = response.json()
+        shibe_url = response.json()[0]  # Assuming the API returns a list of URLs
         return MaterializeResult(
-            value=data,
-            metadata={
-                "status_code": MetadataValue.int(response.status_code),
-                "url_requested": MetadataValue.text(response.url),
-            },
+            value=shibe_url, metadata={"shibe_url": MetadataValue.url(shibe_url)}
         )
     except requests.RequestException as e:
-        logging.error(f"Failed to fetch shibe image data: {e}")
+        logger.error(f"Failed to retrieve Shibe picture: {e}")
         return MaterializeResult(
             value=None, metadata={"error": MetadataValue.text(str(e))}
         )
 
 
-@asset
-def shibe_picture_url(shibe_image_data) -> MaterializeResult:
-    """Extracts and returns the shibe picture URL from the image data with metadata."""
-    if shibe_image_data:
-        url = shibe_image_data[0]
-        return MaterializeResult(
-            value=url, metadata={"picture_url": MetadataValue.url(url)}
+@job
+def shibe_picture_job():
+    shibe_picture_url()
+
+
+@sensor(job=shibe_picture_job)
+def shibe_api_availability_sensor():
+    response = requests.get("http://shibe.online/api/shibes?count=1&urls=true")
+    if response.status_code == 200:
+        yield RunRequest(
+            run_key="shibe_api_check",
+            run_config={
+                "ops": {
+                    "shibe_picture_url": {
+                        "config": {
+                            "api_url": "http://shibe.online/api/shibes",
+                            "count": 1,
+                            "urls": True,
+                        }
+                    }
+                }
+            },
         )
-    return MaterializeResult(
-        value=None, metadata={"error": MetadataValue.text("No image data available")}
-    )
 
 
-defs = Definitions(assets=[shibe_image_data, shibe_picture_url])
+defs = Definitions(assets=[shibe_picture_url], sensors=[shibe_api_availability_sensor])

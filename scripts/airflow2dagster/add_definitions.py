@@ -61,9 +61,6 @@ class AddDefinitionsModule(dspy.Module):
             "defs = Definitions" in pred.dagster_code,
             "All created Dagster objects should be added to a global `Definitions` object. Do not use the legacy `@repository` syntax.",
         )
-        dspy.Suggest(
-            *is_runnable(pred.dagster_code, verbose=True)
-        )  # Some code cannot be run without external dependencies
 
         # Use LLM to check whether only a `Definitions` object is added
         pred_check = self.check_only_definition_added(
@@ -74,5 +71,9 @@ class AddDefinitionsModule(dspy.Module):
             pred_check.output.only_definition_is_added,
             "Ensure that *only* `dagster.Definitions` is added to the code.",
         )
+
+        dspy.Suggest(
+            *is_runnable(pred.dagster_code, verbose=True)
+        )  # Some code cannot be run without external dependencies
 
         return dspy.Prediction(dagster_code=pred.dagster_code)
