@@ -1,62 +1,74 @@
 
-from dagster import asset, MaterializeResult, AssetIn, MetadataValue, Config, Definitions, define_asset_job, ScheduleDefinition, AssetSelection, AssetExecutionContext
+from dagster import (
+    AssetSelection,
+    Definitions,
+    ScheduleDefinition,
+    define_asset_job,
+    load_assets_from_modules,
+    DefaultScheduleStatus,
+    asset,
+    Config,
+    MaterializeResult,
+    MetadataValue
+)
+from typing import List
+from pathlib import Path
+import shutil
+import os
 from pydantic import Field
-from airflow.io.path import ObjectStoragePath
 
-class RemoteFilesConfig(Config):
-    object_storage: str = Field(default="s3", description="Object storage type")
-    conn_id: str = Field(default="aws_s3_webinar_conn", description="Connection ID for object storage")
-    path: str = Field(default="ce-2-8-examples-bucket", description="Path in the object storage")
+# Define the configuration for the asset
+class TransferAndReadPoemsConfig(Config):
+    object_storage: str = Field(default="s3", description="Type of object storage")
+    conn_id: str = Field(default="aws_s3_webinar_conn", description="Connection ID for AWS S3")
+    path: str = Field(default="ce-2-8-examples-bucket", description="Bucket path in S3")
+    local_storage_path: str = Field(default="/include/poems/", description="Local storage path for poems")
 
-class LocalFilesConfig(Config):
-    local_path: str = Field(default="file://include/poems/", description="Local path to copy files to")
-
+# Define the asset
 @asset
-def remote_files(context: AssetExecutionContext, config: RemoteFilesConfig) -> MaterializeResult:
-    """List files in remote object storage."""
-    base_src = ObjectStoragePath(f"{config.object_storage}://{config.path}", conn_id=config.conn_id)
-    path = base_src / "poems/"
-    files = [f for f in path.iterdir() if f.is_file()]
-    metadata = {"file_count": MetadataValue.int(len(files))}
-    context.log.info(f"Found {len(files)} files in remote storage.")
-    return MaterializeResult(output=files, metadata=metadata)
-
-@asset(ins={"remote_files": AssetIn()})
-def local_files(context: AssetExecutionContext, remote_files: list[ObjectStoragePath], config: LocalFilesConfig) -> MaterializeResult:
-    """Copy files from remote to local storage."""
-    base_dst = ObjectStoragePath(config.local_path)
-    copied_files = []
-    for file in remote_files:
-        file.copy(dst=base_dst)
-        copied_files.append(base_dst / file.name)
-    metadata = {"copied_file_count": MetadataValue.int(len(copied_files))}
-    context.log.info(f"Copied {len(copied_files)} files to local storage.")
-    return MaterializeResult(output=copied_files, metadata=metadata)
-
-@asset(ins={"local_files": AssetIn()})
-def file_contents(context: AssetExecutionContext, local_files: list[ObjectStoragePath]) -> MaterializeResult:
-    """Read the content of the files."""
+def transfer_and_read_poems(config: TransferAndReadPoemsConfig) -> MaterializeResult:
+    """
+    Transfer poem files from remote S3 storage to local storage and read their contents.
+    Returns:
+        MaterializeResult: Contains the list of contents of each poem file and metadata.
+    """
+    remote_path = Path(f"{config.object_storage}://{config.path}/poems")
+    local_path = Path(config.local_storage_path)
+    local_path.mkdir(parents=True, exist_ok=True)
     contents = []
-    for file in local_files:
-        bytes = file.read_block(offset=0, length=None)
-        text = bytes.decode("utf-8")
-        contents.append(text)
-    metadata = {"file_count": MetadataValue.int(len(contents))}
-    context.log.info(f"Read contents of {len(contents)} files.")
-    return MaterializeResult(output=contents, metadata=metadata)
+    poem_names = []
+    for file in os.listdir(remote_path):
+        local_file_path = local_path / file
+        shutil.copy(remote_path / file, local_file_path)
+        with open(local_file_path, 'r', encoding='utf-8') as f:
+            contents.append(f.read())
+        poem_names.append(file)
+    # Metadata about the number of poems and their names
+    metadata = {
+        "number_of_poems": MetadataValue.int(len(poem_names)),
+        "poem_names": MetadataValue.json(poem_names)
+    }
+    return MaterializeResult(contents, metadata)
+
+# Load assets from the current module
+all_assets = load_assets_from_modules([__name__])
 
 # Define a job that will materialize the assets
-object_storage_job = define_asset_job("object_storage_job", selection=AssetSelection.all())
-
-# Define a schedule for the job
-object_storage_schedule = ScheduleDefinition(
-    job=object_storage_job,
-    cron_schedule="0 0 * * 0",  # every Sunday at midnight
+transfer_and_read_poems_job = define_asset_job(
+    "transfer_and_read_poems_job",
+    selection=AssetSelection.all()  # Selects all assets, adjust if necessary
 )
 
-# Create the Definitions object
+# Define a schedule for the job with a cron expression for weekly execution on Sunday at midnight
+transfer_and_read_poems_schedule = ScheduleDefinition(
+    job=transfer_and_read_poems_job,
+    cron_schedule="0 0 * * 0",  # every Sunday at midnight
+    default_status=DefaultScheduleStatus.RUNNING  # Automatically start the schedule
+)
+
+# Update the Definitions object to include the job and schedule
 defs = Definitions(
-    assets=[remote_files, local_files, file_contents],
-    jobs=[object_storage_job],
-    schedules=[object_storage_schedule],
+    assets=all_assets,
+    jobs=[transfer_and_read_poems_job],
+    schedules=[transfer_and_read_poems_schedule]
 )
