@@ -66,7 +66,6 @@ class AddDefinitionsModule(dspy.Module):
         )  # Some code cannot be run without external dependencies
 
         # Use LLM to check whether only a `Definitions` object is added
-        # NOTE: This check is added at the very end, since it is costly to ping the LLM
         pred_check = self.check_only_definition_added(
             input_dagster_code=input_dagster_code,
             output_dagster_code=pred.dagster_code,
