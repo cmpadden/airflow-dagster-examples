@@ -1,15 +1,17 @@
-from dagster import (
-    Definitions,
-    define_asset_job,
-    ScheduleDefinition,
-    AssetSelection,
-    DefaultScheduleStatus,
-)
-from pathlib import Path
-import shutil
 import os
+import shutil
+from pathlib import Path
+
+from dagster import (
+    Config,
+    Definitions,
+    MaterializeResult,
+    MetadataValue,
+    ScheduleDefinition,
+    asset,
+    define_asset_job,
+)
 from pydantic import Field
-from dagster import asset, Config, MaterializeResult, MetadataValue
 
 
 class TransferAndReadPoemsConfig(Config):
@@ -25,7 +27,8 @@ class TransferAndReadPoemsConfig(Config):
 
 @asset
 def transfer_and_read_poems(config: TransferAndReadPoemsConfig) -> MaterializeResult:
-    """Transfer poem files from remote S3 storage to local storage and read their contents.
+    """
+    Transfer poem files from remote S3 storage to local storage and read their contents.
     Returns:
         MaterializeResult: Contains the list of contents of each poem file and metadata.
     """
@@ -39,7 +42,7 @@ def transfer_and_read_poems(config: TransferAndReadPoemsConfig) -> MaterializeRe
         shutil.copy(remote_path / file, local_file_path)
         with open(local_file_path, "r", encoding="utf-8") as f:
             contents.append(f.read())
-        poem_names.append(file)
+            poem_names.append(file)
     # Metadata about the number of poems and their names
     metadata = {
         "number_of_poems": MetadataValue.int(len(poem_names)),
@@ -48,18 +51,19 @@ def transfer_and_read_poems(config: TransferAndReadPoemsConfig) -> MaterializeRe
     return MaterializeResult(contents, metadata)
 
 
-# Define a job that will materialize the assets
-poems_job = define_asset_job(
-    "poems_job", selection=AssetSelection.assets(transfer_and_read_poems)
+poem_transfer_job = define_asset_job(
+    "poem_transfer_job", selection=[transfer_and_read_poems]
 )
 
-# Define a schedule that runs the job every Sunday at midnight
-poems_schedule = ScheduleDefinition(
-    job=poems_job,
+poem_transfer_schedule = ScheduleDefinition(
+    job=poem_transfer_job,
     cron_schedule="0 0 * * 0",  # every Sunday at midnight
-    default_status=DefaultScheduleStatus.RUNNING,
+    name="weekly_poem_transfer_schedule",
 )
+
 
 defs = Definitions(
-    assets=[transfer_and_read_poems], jobs=[poems_job], schedules=[poems_schedule]
+    assets=[transfer_and_read_poems],
+    jobs=[poem_transfer_job],
+    schedules=[poem_transfer_schedule],
 )

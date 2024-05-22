@@ -1,19 +1,18 @@
-from dagster import (
-    asset,
-    Config,
-    MaterializeResult,
-    MetadataValue,
-    Definitions,
-    ScheduleDefinition,
-    define_asset_job,
-    AssetSelection,
-    RetryPolicy,
-)
 import os
 import subprocess
 import time
-from pydantic import Field
 from typing import List
+
+from dagster import (
+    Config,
+    Definitions,
+    MaterializeResult,
+    MetadataValue,
+    ScheduleDefinition,
+    asset,
+    define_asset_job,
+)
+from pydantic import Field
 
 
 class DBTConfig(Config):
@@ -65,24 +64,15 @@ def dbt_project_execution(config: DBTConfig) -> MaterializeResult:
     return MaterializeResult(metadata=metadata)
 
 
-# Define the retry policy
-retry_policy = RetryPolicy(max_retries=2)
+dbt_job = define_asset_job("dbt_job", selection=[dbt_project_execution])
 
-# Define the job that will materialize the asset with retry policy
-dbt_job = define_asset_job(
-    "dbt_job",
-    selection=AssetSelection.assets(dbt_project_execution),
-    op_retry_policy=retry_policy,
-)
-
-# Define the schedule for the job
 dbt_schedule = ScheduleDefinition(
     job=dbt_job,
     cron_schedule="0 0 * * *",  # every day at midnight
+    name="daily_dbt_job_schedule",
 )
 
+
 defs = Definitions(
-    assets=[dbt_project_execution],
-    jobs=[dbt_job],
-    schedules=[dbt_schedule],
+    assets=[dbt_project_execution], jobs=[dbt_job], schedules=[dbt_schedule]
 )

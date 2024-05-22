@@ -1,6 +1,7 @@
-from dagster import Definitions, asset, Config, MaterializeResult, MetadataValue
-import requests
 import logging
+
+import requests
+from dagster import Config, Definitions, MaterializeResult, MetadataValue, asset
 from pydantic import Field
 
 
@@ -13,7 +14,9 @@ class ShibeImageDataConfig(Config):
 
 @asset
 def shibe_image_data(config: ShibeImageDataConfig) -> MaterializeResult:
-    """Fetches shibe image data from the API and returns it with metadata."""
+    """
+    Fetches shibe image data from the API and returns it with metadata.
+    """
     try:
         response = requests.get(config.api_url)
         response.raise_for_status()  # Raises an HTTPError for bad responses
@@ -34,7 +37,9 @@ def shibe_image_data(config: ShibeImageDataConfig) -> MaterializeResult:
 
 @asset
 def shibe_picture_url(shibe_image_data) -> MaterializeResult:
-    """Extracts and returns the shibe picture URL from the image data with metadata."""
+    """
+    Extracts and returns the shibe picture URL from the image data with metadata.
+    """
     if shibe_image_data:
         url = shibe_image_data[0]
         return MaterializeResult(

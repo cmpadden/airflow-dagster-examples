@@ -1,17 +1,17 @@
+import json
+import logging
+
+import requests
 from dagster import (
-    asset,
+    AssetSelection,
     Config,
+    Definitions,
     MaterializeResult,
     MetadataValue,
-    Definitions,
-    define_asset_job,
     ScheduleDefinition,
-    DefaultScheduleStatus,
-    RetryPolicy,
+    asset,
+    define_asset_job,
 )
-import requests
-import logging
-import json
 from pydantic import Field
 
 
@@ -39,15 +39,19 @@ def bitcoin_market_data(config: BitcoinMarketDataConfig) -> MaterializeResult:
         return MaterializeResult(
             metadata={"error": MetadataValue.text("Failed to fetch data")}
         )
+
     processed_data = {
         "usd": bitcoin_data["usd"],
         "change": bitcoin_data["usd_24h_change"],
     }
+
     logging.info(
         f"Bitcoin Market Data: USD {processed_data['usd']} with change {processed_data['change']}"
     )
+
     # Convert the raw data to JSON for metadata
     raw_data_json = json.dumps(bitcoin_data, indent=2)
+
     # Create metadata entries
     metadata_entries = {
         "raw_data": MetadataValue.json(raw_data_json),
@@ -55,22 +59,23 @@ def bitcoin_market_data(config: BitcoinMarketDataConfig) -> MaterializeResult:
             f"USD {processed_data['usd']} with change {processed_data['change']}"
         ),
     }
+
     return MaterializeResult(output=processed_data, metadata=metadata_entries)
 
 
-# Define the job with retry policy
-retry_policy = RetryPolicy(max_retries=2)
-bitcoin_job = define_asset_job(
-    "bitcoin_job", selection=["bitcoin_market_data"], op_retry_policy=retry_policy
+bitcoin_data_job = define_asset_job(
+    "bitcoin_data_job", selection=AssetSelection.assets(bitcoin_market_data)
 )
 
-# Define the schedule
-bitcoin_schedule = ScheduleDefinition(
-    job=bitcoin_job,
-    cron_schedule="0 0 * * *",  # Daily at midnight
-    default_status=DefaultScheduleStatus.RUNNING,
+bitcoin_data_schedule = ScheduleDefinition(
+    job=bitcoin_data_job,
+    cron_schedule="0 0 * * *",  # every day at midnight
+    name="daily_bitcoin_data_schedule",
 )
+
 
 defs = Definitions(
-    assets=[bitcoin_market_data], jobs=[bitcoin_job], schedules=[bitcoin_schedule]
+    assets=[bitcoin_market_data],
+    jobs=[bitcoin_data_job],
+    schedules=[bitcoin_data_schedule],
 )

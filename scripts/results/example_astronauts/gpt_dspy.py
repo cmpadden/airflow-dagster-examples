@@ -1,15 +1,13 @@
+import requests
 from dagster import (
-    asset,
     Config,
+    Definitions,
     MaterializeResult,
     MetadataValue,
-    Definitions,
-    define_asset_job,
     ScheduleDefinition,
-    AssetSelection,
-    RetryPolicy,
+    asset,
+    define_asset_job,
 )
-import requests
 from pydantic import Field
 
 
@@ -24,8 +22,9 @@ class AstronautMessagesConfig(Config):
 def astronaut_messages(config: AstronautMessagesConfig) -> MaterializeResult:
     """
     Fetches data about astronauts currently in space from the Open Notify API and creates a descriptive message for each astronaut.
+
     Returns:
-    MaterializeResult: Descriptive messages about each astronaut with metadata.
+        MaterializeResult: Descriptive messages about each astronaut with metadata.
     """
     response = requests.get(config.api_url)
     response.raise_for_status()  # Proper error handling
@@ -48,25 +47,19 @@ def astronaut_messages(config: AstronautMessagesConfig) -> MaterializeResult:
     return MaterializeResult(output=messages, metadata=metadata)
 
 
-# Define the retry policy
-retry_policy = RetryPolicy(max_retries=3)
-
-# Define the job that includes the astronaut_messages asset with retry policy
-astronaut_job = define_asset_job(
-    "astronaut_job",
-    selection=AssetSelection.assets(astronaut_messages),
-    op_retry_policy=retry_policy,
+astronaut_messages_job = define_asset_job(
+    "astronaut_messages_job", selection=[astronaut_messages]
 )
 
-# Define a schedule for the astronaut_job to run daily
 astronaut_schedule = ScheduleDefinition(
-    job=astronaut_job,
-    cron_schedule="0 0 * * *",  # At 00:00 (midnight) every day
+    job=astronaut_messages_job,
+    cron_schedule="0 0 * * *",  # Daily at midnight
+    name="daily_astronaut_schedule",
 )
 
-# Add the job and schedule to the Definitions object
+
 defs = Definitions(
     assets=[astronaut_messages],
-    jobs=[astronaut_job],
+    jobs=[astronaut_messages_job],
     schedules=[astronaut_schedule],
 )
