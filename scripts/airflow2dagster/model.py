@@ -9,6 +9,7 @@ from airflow2dagster.add_materialization_results import AddMaterializationResult
 from airflow2dagster.add_retry_policy import AddRetryPolicyModule
 from airflow2dagster.add_schedule import AddScheduleModule
 from airflow2dagster.translate_core_logic import TranslateCoreLogicModule
+from airflow2dagster.add_dependencies import AddDependenciesModule
 from airflow2dagster.utils import format_code
 from dspy.primitives.assertions import backtrack_handler
 
@@ -16,6 +17,7 @@ from dspy.primitives.assertions import backtrack_handler
 class Model(dspy.Module):
     def __init__(self):
         self.translate_core_logic = TranslateCoreLogicModule()
+        self.add_dependencies = AddDependenciesModule()
         self.add_materialization_result = AddMaterializationResultModule()
         self.add_config = AddConfigModule()
         self.add_definitions = AddDefinitionsModule()
@@ -25,6 +27,7 @@ class Model(dspy.Module):
 
     def forward(self, airflow_code: str) -> dspy.Prediction:
         pred = self.translate_core_logic(airflow_code)
+        pred = self.add_dependencies(pred.dagster_code)
         pred = self.add_materialization_result(pred.dagster_code)
 
         # NOTE: From experiments, configs should be generated *after* materialization results.
