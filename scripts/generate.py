@@ -54,11 +54,14 @@ def generate_gpt_naive(airflow_code: str) -> str:
 
 @app.command()
 def cli_generate():
-    subfolders = sorted([
-        folder
-        for folder in Path("..").iterdir()
-        if folder.is_dir() and folder.name not in ("data", ".git", "scripts")
-    ])
+    subfolders = sorted(
+        [
+            folder
+            for folder in Path("..").iterdir()
+            if folder.is_dir()
+            and folder.name not in ("data", ".git", "scripts", "data_platform")
+        ]
+    )
 
     results_root = Path("./results")
 
@@ -70,24 +73,29 @@ def cli_generate():
         result_folder = results_root / folder.name
         result_folder.mkdir(exist_ok=True, parents=True)
 
-        print("--- Just copy airflow ---")
-        (result_folder / "airflow.py").write_text(airflow_code)
+        # print("--- Just copy airflow ---")
+        # (result_folder / "airflow.py").write_text(airflow_code)
 
-        print("--- Human ---")
-        (result_folder / "human.py").write_text(
-            (folder / "dagster_version.py").read_text()
-        )
+        # print("--- Human ---")
+        # (result_folder / "human.py").write_text(
+        #     (folder / "dagster_version.py").read_text()
+        # )
 
-        print("--- GPT Naive ---")
-        (result_folder / "gpt_naive.py").write_text(
-            generate_gpt_naive(airflow_code=airflow_code)
-        )
+        # print("--- GPT Naive ---")
+        # (result_folder / "gpt_naive.py").write_text(
+        #     generate_gpt_naive(airflow_code=airflow_code)
+        # )
+
+        # if folder.name not in ("list_files", "sensor"):
+        #     continue
 
         print("--- GPT DSPy ---")
         try:
             code = translate_airflow_code(airflow_code=airflow_code, retries=6)
         except dspy.DSPyAssertionError as e:
             code = f'"""Failed to generate Dagster code with error: {e}"""'
+        # except AttributeError:
+        #     code = """Failed to generate Dagster code with AttributeError"""
         (result_folder / "gpt_dspy.py").write_text(code)
 
 

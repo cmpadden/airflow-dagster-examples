@@ -40,7 +40,9 @@ def _evaluate(references: list[Reference], candidates: list[Path]) -> pd.DataFra
     bleu = evaluate.load("bleu")
 
     assert len(references) == len(candidates)
-    assert all([r.example_name == c.parent.name for (r, c) in zip(references, candidates)])
+    assert all(
+        [r.example_name == c.parent.name for (r, c) in zip(references, candidates)]
+    )
 
     references_code = [x.dagster_code.read_text() for x in references]
     candidates_code = [x.read_text() for x in candidates]
@@ -103,11 +105,14 @@ def _evaluate(references: list[Reference], candidates: list[Path]) -> pd.DataFra
 
 
 def read_reference_files(result_folder: Path) -> list[Reference]:
-    subfolders = sorted([
-        folder
-        for folder in result_folder.iterdir()
-        if folder.is_dir() and folder.name not in ("data", ".git", "scripts")
-    ])
+    subfolders = sorted(
+        [
+            folder
+            for folder in result_folder.iterdir()
+            if folder.is_dir()
+            and folder.name not in ("data", ".git", "scripts", "data_platform")
+        ]
+    )
 
     samples = []
     for folder in subfolders:

@@ -36,7 +36,7 @@ def format_code(code: str) -> str:
         Path(fp.name).write_text(code)
 
         # Run Ruff via the CLI
-        subprocess.run(  # Remove unused imports
+        subprocess.run(  # Remove unused imports and sort imports
             ["ruff", "check", "--fix", "--extend-select=I", fp.name],
             capture_output=True,
             text=True,
