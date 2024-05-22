@@ -3,54 +3,71 @@ from airflow2dagster.utils import extract_code_block_from_markdown
 from metrics.run_validity import is_runnable
 
 relevant_documentation = """
-### Metadata and Markdown
+### Add Metadata when running
 
-The DataFrame was embedded into the asset's metadata with Markdown. Any valid Markdown snippet can be stored and rendered in the Dagster UI, including images. By embedding a bar chart of the most frequently used words as metadata, you and your team can visualize and analyze the `most_frequent_words` asset without leaving the Dagster UI.
+Prioritize returning metadata using `MaterializeResult`. This is a best practice in Dagster to ensure that metadata made at runtime is tracked asset definition functions. Metadata can be added to an asset returning the `MaterializeResult` object.
 
-Below is code that changes shows how to add an an image of a bar chart in asset metadata. Replace your `most_frequent_words` asset with the following:
+Metadata is important for high-level information about an asset. It can include information like the asset's schema, summary statistics, or even visualizations. In Dagster, metadata can be added to an asset using the `MaterializeResult` object.
 
-```python file=/tutorial/building_an_asset_graph/assets_with_metadata.py startafter=start_most_frequent_words_asset_with_metadata endbefore=end_most_frequent_words_asset_with_metadata
-@asset(deps=[topstories])
-def most_frequent_words() -> MaterializeResult:
-    stopwords = ["a", "the", "an", "of", "to", "in", "for", "and", "with", "on", "is"]
+It is a Dagster best practice to track metadata fo any assets that are materialized. If you are not using IO managers, the recommended way to do this is to use the `MaterializeResult` object to return metadata at the end of the asset function.
 
-    topstories = pd.read_csv("data/topstories.csv")
+In the below example, we are adding metadata to the asset using the `MaterializeResult` object. The metadata is a dictionary with a single key, `plot`, that contains a Markdown image of the top 25 words in Hacker News titles.
 
-    # loop through the titles and count the frequency of each word
-    word_counts = {}
-    for raw_title in topstories["title"]:
-        title = raw_title.lower()
-        for word in title.split():
-            cleaned_word = word.strip(".,-!?:;()[]'\"-")
-            if cleaned_word not in stopwords and len(cleaned_word) > 0:
-                word_counts[cleaned_word] = word_counts.get(cleaned_word, 0) + 1
+```
+from dagster import asset, MetadataValue, MaterializeResult
+import pandas as pd
+import os
 
-    # Get the top 25 most frequent words
-    top_words = {
-        pair[0]: pair[1]
-        for pair in sorted(word_counts.items(), key=lambda x: x[1], reverse=True)[:25]
+@asset
+def data_asset(context) -> MaterializeResult:
+    # Sample data
+    data = {
+        'col1': [1, 2, 3, 4, 5],
+        'col2': [10, 20, 30, 40, 50]
     }
+    df = pd.DataFrame(data)
 
-    # Make a bar chart of the top 25 words
-    plt.figure(figsize=(10, 6))
-    plt.bar(list(top_words.keys()), list(top_words.values()))
-    plt.xticks(rotation=45, ha="right")
-    plt.title("Top 25 Words in Hacker News Titles")
-    plt.tight_layout()
+    # Write data to local storage
+    file_path = "data.csv"
+    df.to_csv(file_path, index=False)
 
-    # Convert the image to a saveable format
-    buffer = BytesIO()
-    plt.savefig(buffer, format="png")
-    image_data = base64.b64encode(buffer.getvalue())
+    # Calculate metadata
+    file_size = os.path.getsize(file_path)
+    row_count = len(df)
+    averages = df.mean().to_dict()
 
-    # Convert the image to Markdown to preview it within Dagster
-    md_content = f"![img](data:image/png;base64,{image_data.decode()})"
+    # Return MaterializeResult
+    return MaterializeResult(
+        metadata={
+            "file_path": MetadataValue.path(file_path),
+            "file_size": MetadataValue.int(file_size),
+            "row_count": MetadataValue.int(row_count),
+            "averages": MetadataValue.json(averages)
+        }
+    )
+```
 
-    with open("data/most_frequent_words.json", "w") as f:
-        json.dump(top_words, f)
+DO NOT just blindly return the metadata as a dictionary without wrapping it in a `MaterializeResult`.
 
-    # Attach the Markdown content as metadata to the asset
-    return MaterializeResult(metadata={"plot": MetadataValue.md(md_content)})
+### Definition-time metadata
+
+In all cases, you should add static metadata to an asset when it's defined. This can be done using some arguments in the `@asset` decorator. For example, you should categorize your assets with the `group_name` argument, indicate the main compute/storage system with compute_kind (like `Python`), add asset owners' emails with `owners`, or do custom and domain-specific categorization with the tags argument. You can add a description using the Python docsrting.
+
+Here's an example:
+
+```
+from dagster import asset
+
+@asset(
+    group_name="finance",
+    compute_kind="pandas",
+    owners=["hello@dagsterlabs.com", "team:finance"]
+)
+def finance_data():
+    \"""
+    This asset contains financial data for the company.
+    \"""
+    pass
 ```
 """
 

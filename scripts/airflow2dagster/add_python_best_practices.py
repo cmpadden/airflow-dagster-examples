@@ -27,7 +27,6 @@ import requests
 
 response = requests.get(API)
 response.raise_for_status()
-return MaterializeResult()
 ```
 
 ### Dagster Logging
@@ -43,6 +42,8 @@ def my_asset(context: AssetExecutionContext):
     context.log.warning("This is a warning message")
     context.log.error("This is an error message")
 ```
+
+DO NOT remove any existing `MaterializeResult` objects that are being returned. Logging and returning metadata are not mutually exclusive and are complementary to each other.
 """
 
 

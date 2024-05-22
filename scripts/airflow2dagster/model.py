@@ -8,13 +8,17 @@ from airflow2dagster.add_materialization_results import AddMaterializationResult
 from airflow2dagster.add_retry_policy import AddRetryPolicyModule
 from airflow2dagster.add_schedule import AddScheduleModule
 from airflow2dagster.add_python_best_practices import AddPythonBestPracticesModule
+from airflow2dagster.add_disincentivize_io_managers import AddDisincentivizeIOManagersModule
 from airflow2dagster.translate_core_logic import TranslateCoreLogicModule
 from dspy.primitives.assertions import backtrack_handler
 
+import logging
 
 class Model(dspy.Module):
     def __init__(self):
         self.translate_core_logic = TranslateCoreLogicModule()
+        self.add_integration = AddDagsterIntegrationModule()
+        self.add_disincentivize_io_managers = AddDisincentivizeIOManagersModule()
         self.add_materialization_result = AddMaterializationResultModule()
         self.add_definitions = AddDefinitionsModule()
         self.add_schedule = AddScheduleModule()
@@ -25,14 +29,16 @@ class Model(dspy.Module):
     def forward(self, airflow_code: str) -> dspy.Prediction:
         pred = self.translate_core_logic(airflow_code)
 
-        pred = self.add_materialization_result(pred.dagster_code)
+        pred = self.add_integration(pred.dagster_code)
+        pred = self.add_disincentivize_io_managers(pred.dagster_code)
         pred = self.add_definitions(pred.dagster_code)
         pred = self.add_schedule(airflow_code, pred.dagster_code)
-        pred = self.add_best_practices(pred.dagster_code)
         if "retries" in airflow_code.lower():
             pred = self.add_retry_policy(airflow_code, pred.dagster_code)
         # if "check" in airflow_code.lower():
         #     pred = self.add_asset_check(airflow_code, pred.dagster_code)
+        pred = self.add_best_practices(pred.dagster_code)
+        pred = self.add_materialization_result(pred.dagster_code)
 
         return dspy.Prediction(dagster_code=pred.dagster_code)
 

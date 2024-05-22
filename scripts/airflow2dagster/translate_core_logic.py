@@ -11,11 +11,9 @@ class TranslateCoreLogicSignature(dspy.Signature):
         - Use `@asset` instead of `@op`, `@job`
         - Assets should be descriptive nouns, ideally related to the domain
         - Use as few assets as possible, combining assets which are too low-level where appropriate
-        - When an asset relies on another asset, it should use the name of the upstream asset as input
+        - When an asset relies on another asset, this relationship should be explicitly defined by using the `deps` argument in the downstream function's `@asset` decorator to pass in the upstream asset's definition. Avoid using ins, outs, or passing the asset as an argument to the function.
 
     Out of scope:
-        - Asset materialization metadata
-        - Data quality checks
         - Schedule, sensors, resources, io managers, definitions
     """
 
@@ -42,7 +40,7 @@ def fewer_assets_than_tasks(airflow_code: str, dagster_code: str) -> bool:
     if task_count <= 1:
         return True
 
-    return asset_count < task_count
+    return asset_count <= task_count
 
 
 class TranslateCoreLogicModule(dspy.Module):
