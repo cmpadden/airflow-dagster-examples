@@ -22,26 +22,23 @@ class Model(dspy.Module):
 
     def forward(self, airflow_code: str) -> dspy.Prediction:
         pred = self.translate_core_logic(airflow_code)
-        pred = self.add_materialization_result(pred.output)
+        pred = self.add_materialization_result(pred.dagster_code)
 
         # NOTE: From experiments, configs should be generated *after* materialization results.
         # Otherwise, the `AddMaterializationModule`'s output
         # fails to retain the correct, original Config code and removes it
-        pred = self.add_config(pred.output)
+        pred = self.add_config(pred.dagster_code)
 
         # TODO: Comment out temporarily until PR#6 is merged
         #       That will make it easier to incorporate the retry module
         # if "retries" in airflow_code.lower():
-        #     pred = self.add_retry_policy(airflow_code, pred.output)
+        #     pred = self.add_retry_policy(airflow_code, pred.dagster_code)
 
-        schedule_code = self.add_schedule(airflow_code, pred.output).output
-        code = combine_code_snippets([pred.output, schedule_code])
+        schedule_pred = self.add_schedule(airflow_code, pred.dagster_code)
+        code = combine_code_snippets([pred.dagster_code, schedule_pred.dagster_code])
 
-        definitions_code = self.add_definitions(code).output
-        final_output = combine_code_snippets([code, definitions_code])
-
-        # if "check" in airflow_code.lower():
-        #     pred = self.add_asset_check(airflow_code, pred.output)
+        definitions_pred = self.add_definitions(code)
+        final_output = combine_code_snippets([code, definitions_pred.dagster_code])
 
         return dspy.Prediction(dagster_code=format_code(final_output))
 
