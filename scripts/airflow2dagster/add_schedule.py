@@ -9,6 +9,8 @@ from airflow2dagster.utils import (
 from metrics.run_validity import is_runnable
 from pydantic import BaseModel
 
+logger = logging.getLogger(__name__)
+
 
 class Output(BaseModel):
     has_schedule: bool
@@ -58,7 +60,7 @@ class AddScheduleModule(dspy.Module):
             logger.info(
                 "No schedule detected in the Airflow code, so no schedule will be added to the translated Dagster code"
             )
-            return dspy.Prediction(output="")
+            return dspy.Prediction(dagster_code="")
 
         context = self.retrieve(self.add_schedule.signature.__doc__).passages
 
@@ -67,17 +69,22 @@ class AddScheduleModule(dspy.Module):
             airflow_code=airflow_code,
             input_dagster_code=input_dagster_code,
         )
-        pred.schedule_code = extract_code_block_from_markdown(pred.schedule_code)
+        pred.dagster_code = extract_code_block_from_markdown(pred.dagster_code)
 
         dspy.Assert(
-            "define_asset_job" in pred.schedule_code,
+            "define_asset_job" in pred.dagster_code,
             "Use `define_asset_job` to create a job over the assets",
         )
 
-        code_cat = combine_code_snippets([input_dagster_code, pred.schedule_code])
+        dspy.Assert(
+            "Definitions" not in pred.dagster_code,
+            "Do not generate the `Definitions` object. Only the asset jobs and schedules are needed",
+        )
+
+        code_cat = combine_code_snippets([input_dagster_code, pred.dagster_code])
 
         dspy.Suggest(
             *is_runnable(code_cat, verbose=True)
         )  # Some code cannot be run without external dependencies
 
-        return dspy.Prediction(dagster_code=pred.schedule_code)
+        return dspy.Prediction(dagster_code=pred.dagster_code)

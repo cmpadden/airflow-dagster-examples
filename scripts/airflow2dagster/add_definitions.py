@@ -39,16 +39,16 @@ class AddDefinitionsModule(dspy.Module):
             context="\n".join(context),
             input_dagster_code=input_dagster_code,
         )
-        pred.definitions_code = extract_code_block_from_markdown(pred.definitions_code)
+        pred.dagster_code = extract_code_block_from_markdown(pred.dagster_code)
 
         dspy.Assert(
-            "= Definitions(" in pred.definitions_code,
+            "= Definitions(" in pred.dagster_code,
             "All created Dagster objects should be added to a global `Definitions` object. Do not use the legacy `@repository` syntax.",
         )
-        code_cat = combine_code_snippets([input_dagster_code, pred.definitions_code])
+        code_cat = combine_code_snippets([input_dagster_code, pred.dagster_code])
 
         dspy.Suggest(
             *is_runnable(code_cat, verbose=True)
         )  # Some code cannot be run without external dependencies
 
-        return dspy.Prediction(dagster_code=pred.definitions_code)
+        return dspy.Prediction(dagster_code=pred.dagster_code)
