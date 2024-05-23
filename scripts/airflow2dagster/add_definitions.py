@@ -19,7 +19,7 @@ class AddDefinitionsSignature(dspy.Signature):
     input_dagster_code = dspy.InputField(
         desc="Assume that the input dagster code is located in a sibling Python module `dagster_code.py`"
     )
-    definitions_code = dspy.OutputField(
+    dagster_code = dspy.OutputField(
         desc=(
             "Dagster code containing the `dagster.Definitions`, in a separate file. "
             "The code imports the necessary objects from the input dagster code"
@@ -50,4 +50,4 @@ class AddDefinitionsModule(dspy.Module):
             *is_runnable(code_cat, verbose=True)
         )  # Some code cannot be run without external dependencies
 
-        return dspy.Prediction(output=pred.definitions_code)
+        return dspy.Prediction(dagster_code=pred.definitions_code)

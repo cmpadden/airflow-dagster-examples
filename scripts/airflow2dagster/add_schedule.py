@@ -40,7 +40,7 @@ class AddScheduleSignature(dspy.Signature):
     input_dagster_code = dspy.InputField(
         desc="Assume that it is located in a sibling Python module `dagster_code.py`"
     )
-    schedule_code = dspy.OutputField(
+    dagster_code = dspy.OutputField(
         desc=(
             "Dagster schedule code that is equivalent to Airflow's, in a separate file. "
             "The code imports the necessary objects from the input dagster code"
@@ -81,4 +81,4 @@ class AddScheduleModule(dspy.Module):
             *is_runnable(code_cat, verbose=True)
         )  # Some code cannot be run without external dependencies
 
-        return dspy.Prediction(output=pred.schedule_code)
+        return dspy.Prediction(dagster_code=pred.schedule_code)
