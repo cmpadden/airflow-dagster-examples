@@ -81,10 +81,9 @@ class AddScheduleModule(dspy.Module):
             "Do not generate the `Definitions` object. Only the asset jobs and schedules are needed",
         )
 
-        code_cat = combine_code_snippets([input_dagster_code, pred.dagster_code])
-
+        concatenated_code = combine_code_snippets([input_dagster_code, pred.dagster_code])
         dspy.Suggest(
-            *is_runnable(code_cat, verbose=True)
+            *is_runnable(concatenated_code, verbose=True)
         )  # Some code cannot be run without external dependencies
 
         return dspy.Prediction(dagster_code=pred.dagster_code)
