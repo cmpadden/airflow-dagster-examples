@@ -3,7 +3,6 @@ import logging
 
 import requests
 from dagster import (
-    AssetSelection,
     Config,
     Definitions,
     MaterializeResult,
@@ -63,14 +62,11 @@ def bitcoin_market_data(config: BitcoinMarketDataConfig) -> MaterializeResult:
     return MaterializeResult(output=processed_data, metadata=metadata_entries)
 
 
-bitcoin_data_job = define_asset_job(
-    "bitcoin_data_job", selection=AssetSelection.assets(bitcoin_market_data)
-)
+bitcoin_data_job = define_asset_job("bitcoin_data_job", selection=[bitcoin_market_data])
 
 bitcoin_data_schedule = ScheduleDefinition(
     job=bitcoin_data_job,
-    cron_schedule="0 0 * * *",  # every day at midnight
-    name="daily_bitcoin_data_schedule",
+    cron_schedule="0 0 * * *",  # Daily at midnight
 )
 
 

@@ -1,6 +1,7 @@
 import requests
 from dagster import (
     Config,
+    DefaultScheduleStatus,
     Definitions,
     MaterializeResult,
     MetadataValue,
@@ -47,19 +48,17 @@ def astronaut_messages(config: AstronautMessagesConfig) -> MaterializeResult:
     return MaterializeResult(output=messages, metadata=metadata)
 
 
-astronaut_messages_job = define_asset_job(
-    "astronaut_messages_job", selection=[astronaut_messages]
-)
+astronaut_job = define_asset_job("astronaut_job", selection=[astronaut_messages])
 
-astronaut_schedule = ScheduleDefinition(
-    job=astronaut_messages_job,
-    cron_schedule="0 0 * * *",  # Daily at midnight
-    name="daily_astronaut_schedule",
+daily_astronaut_schedule = ScheduleDefinition(
+    job=astronaut_job,
+    cron_schedule="0 0 * * *",  # Run daily at midnight
+    default_status=DefaultScheduleStatus.RUNNING,  # Schedule is active by default
 )
 
 
 defs = Definitions(
     assets=[astronaut_messages],
-    jobs=[astronaut_messages_job],
-    schedules=[astronaut_schedule],
+    jobs=[astronaut_job],
+    schedules=[daily_astronaut_schedule],
 )

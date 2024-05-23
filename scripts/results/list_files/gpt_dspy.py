@@ -3,6 +3,7 @@ import shutil
 from pathlib import Path
 
 from dagster import (
+    AssetSelection,
     Config,
     Definitions,
     MaterializeResult,
@@ -52,13 +53,12 @@ def transfer_and_read_poems(config: TransferAndReadPoemsConfig) -> MaterializeRe
 
 
 poem_transfer_job = define_asset_job(
-    "poem_transfer_job", selection=[transfer_and_read_poems]
+    "poem_transfer_job", selection=AssetSelection.assets(transfer_and_read_poems)
 )
 
 poem_transfer_schedule = ScheduleDefinition(
     job=poem_transfer_job,
-    cron_schedule="0 0 * * 0",  # every Sunday at midnight
-    name="weekly_poem_transfer_schedule",
+    cron_schedule="0 0 * * 0",  # Every Sunday at midnight
 )
 
 

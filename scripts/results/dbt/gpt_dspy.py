@@ -68,7 +68,7 @@ dbt_job = define_asset_job("dbt_job", selection=[dbt_project_execution])
 
 dbt_schedule = ScheduleDefinition(
     job=dbt_job,
-    cron_schedule="0 0 * * *",  # every day at midnight
+    cron_schedule="0 0 * * *",  # Daily at midnight
     name="daily_dbt_job_schedule",
 )
 
