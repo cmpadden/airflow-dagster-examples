@@ -110,7 +110,7 @@ def read_reference_files(result_folder: Path) -> list[Reference]:
             folder
             for folder in result_folder.iterdir()
             if folder.is_dir()
-            and folder.name not in ("data", ".git", "scripts", "data_platform")
+            and folder.name not in ("data", ".git", "scripts")
         ]
     )
 
