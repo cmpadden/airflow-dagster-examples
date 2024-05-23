@@ -71,4 +71,4 @@ class TranslateCoreLogicModule(dspy.Module):
             *is_runnable(pred.dagster_code, verbose=True)
         )  # Some code cannot be run without external dependencies
 
-        return dspy.Prediction(output=pred.dagster_code)
+        return dspy.Prediction(dagster_code=pred.dagster_code)
