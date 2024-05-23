@@ -1,14 +1,13 @@
 import logging
 
 import dspy
+from airflow2dagster.constants import PLACEHOLDER_MODULE_FILENAME
 from airflow2dagster.utils import (
     combine_code_snippets,
     extract_code_block_from_markdown,
 )
 from metrics.run_validity import is_runnable
 from pydantic import BaseModel
-
-logger = logging.getLogger(__name__)
 
 
 class Output(BaseModel):
@@ -38,7 +37,7 @@ class AddScheduleSignature(dspy.Signature):
     context = dspy.InputField(desc="Potentially relevant Dagster documentation")
     airflow_code = dspy.InputField(desc="Airflow code containing schedule")
     input_dagster_code = dspy.InputField(
-        desc="Assume that it is located in a sibling Python module `dagster_code.py`"
+        desc=f"Assume that it is located in a sibling Python module `{PLACEHOLDER_MODULE_FILENAME}`"
     )
     dagster_code = dspy.OutputField(
         desc=(

@@ -4,6 +4,7 @@ from airflow2dagster.utils import (
     extract_code_block_from_markdown,
 )
 from metrics.run_validity import is_runnable
+from airflow2dagster.constants import PLACEHOLDER_MODULE_FILENAME
 
 
 class AddDefinitionsSignature(dspy.Signature):
@@ -17,7 +18,7 @@ class AddDefinitionsSignature(dspy.Signature):
 
     context = dspy.InputField(desc="Potentially relevant Dagster documentation")
     input_dagster_code = dspy.InputField(
-        desc="Assume that the input dagster code is located in a sibling Python module `dagster_code.py`"
+        desc=f"Assume that the input dagster code is located in a sibling Python module `{PLACEHOLDER_MODULE_FILENAME}`"
     )
     dagster_code = dspy.OutputField(
         desc=(
