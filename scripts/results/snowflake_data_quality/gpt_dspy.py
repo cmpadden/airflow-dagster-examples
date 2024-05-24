@@ -66,5 +66,9 @@ def trip_data_loading_and_quality_checks(
 
 
 defs = Definitions(
-    assets=[trip_data_preparation_and_upload, snowflake_resources_setup_and_cleanup]
+    assets=[
+        trip_data_preparation_and_upload,
+        snowflake_resources_setup_and_cleanup,
+        trip_data_loading_and_quality_checks,
+    ]
 )

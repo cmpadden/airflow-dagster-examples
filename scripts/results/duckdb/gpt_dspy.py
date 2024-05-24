@@ -88,19 +88,18 @@ def filtered_duck_info(duck_info, config: FilteredDuckInfoConfig):
     )
 
 
-data_processing_job = define_asset_job(
-    "data_processing_job", selection=[duck_info, filtered_duck_info]
+weekly_duck_info_job = define_asset_job(
+    "weekly_duck_info_job", selection=[duck_info, filtered_duck_info]
 )
 
-weekly_schedule = ScheduleDefinition(
-    job=data_processing_job,
-    cron_schedule="0 0 * * 0",  # Every Sunday at midnight
-    name="weekly_data_processing_schedule",
+weekly_duck_info_schedule = ScheduleDefinition(
+    job=weekly_duck_info_job,
+    cron_schedule="0 0 * * 0",  # every Sunday at midnight
 )
 
 
 defs = Definitions(
     assets=[duck_info, filtered_duck_info],
-    jobs=[data_processing_job],
-    schedules=[weekly_schedule],
+    jobs=[weekly_duck_info_job],
+    schedules=[weekly_duck_info_schedule],
 )
