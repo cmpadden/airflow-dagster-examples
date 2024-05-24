@@ -20,7 +20,7 @@ class AddDefinitionsSignature(dspy.Signature):
     input_dagster_code = dspy.InputField(
         desc=f"Assume that the input dagster code is located in a sibling Python module `{PLACEHOLDER_MODULE_FILENAME}`"
     )
-    dagster_code = dspy.OutputField(
+    definitions_code = dspy.OutputField(
         desc=(
             "Dagster code containing the `dagster.Definitions`, in a separate file. "
             "The code imports the necessary objects from the input dagster code"
@@ -39,16 +39,16 @@ class AddDefinitionsModule(dspy.Module):
             context="\n".join(context),
             input_dagster_code=input_dagster_code,
         )
-        pred.dagster_code = extract_code_block_from_markdown(pred.dagster_code)
+        pred.definitions_code = extract_code_block_from_markdown(pred.definitions_code)
 
         dspy.Assert(
-            "= Definitions(" in pred.dagster_code,
+            "= Definitions(" in pred.definitions_code,
             "All created Dagster objects should be added to a global `Definitions` object. Do not use the legacy `@repository` syntax.",
         )
 
-        concatenated_code = combine_code_snippets([input_dagster_code, pred.dagster_code])
+        concatenated_code = combine_code_snippets([input_dagster_code, pred.definitions_code])
         dspy.Suggest(
             *is_runnable(concatenated_code, verbose=True)
         )  # Some code cannot be run without external dependencies
 
-        return dspy.Prediction(dagster_code=pred.dagster_code)
+        return dspy.Prediction(dagster_code=concatenated_code)

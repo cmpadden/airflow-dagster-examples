@@ -7,7 +7,7 @@ from airflow2dagster.add_materialization_results import AddMaterializationResult
 from airflow2dagster.add_retry_policy import AddRetryPolicyModule
 from airflow2dagster.add_schedule import AddScheduleModule
 from airflow2dagster.translate_core_logic import TranslateCoreLogicModule
-from airflow2dagster.utils import combine_code_snippets, format_code
+from airflow2dagster.utils import format_code
 from dspy.primitives.assertions import backtrack_handler
 
 
@@ -34,13 +34,10 @@ class Model(dspy.Module):
         # if "retries" in airflow_code.lower():
         #     pred = self.add_retry_policy(airflow_code, pred.dagster_code)
 
-        schedule_pred = self.add_schedule(airflow_code, pred.dagster_code)
-        code = combine_code_snippets([pred.dagster_code, schedule_pred.dagster_code])
+        pred = self.add_schedule(airflow_code, pred.dagster_code)
+        pred = self.add_definitions(pred.dagster_code)
 
-        definitions_pred = self.add_definitions(code)
-        final_output = combine_code_snippets([code, definitions_pred.dagster_code])
-
-        return dspy.Prediction(dagster_code=format_code(final_output))
+        return dspy.Prediction(dagster_code=format_code(pred.dagster_code))
 
 
 def get_translator(retries: int | None) -> Model:
