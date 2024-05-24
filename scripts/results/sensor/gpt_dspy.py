@@ -1,7 +1,16 @@
 import logging
 
 import requests
-from dagster import Config, Definitions, MaterializeResult, MetadataValue, asset
+from dagster import (
+    Config,
+    Definitions,
+    MaterializeResult,
+    MetadataValue,
+    RunRequest,
+    SensorEvaluationContext,
+    asset,
+    sensor,
+)
 from pydantic import Field
 
 
@@ -50,4 +59,27 @@ def shibe_picture_url(shibe_image_data) -> MaterializeResult:
     )
 
 
-defs = Definitions(assets=[shibe_image_data, shibe_picture_url])
+@sensor(asset_selection=[shibe_image_data])
+def shibe_api_availability_sensor(context: SensorEvaluationContext):
+    """
+    Sensor to check the availability of the Shibe API and trigger the shibe_image_data asset.
+    """
+    api_url = "http://shibe.online/api/shibes?count=1&urls=true"
+    response = requests.get(api_url)
+    run_key = f"shibe-api-status-{response.status_code}"
+
+    if response.status_code == 200:
+        yield RunRequest(
+            run_key=run_key,
+            run_config={"ops": {"shibe_image_data": {"config": {"api_url": api_url}}}},
+        )
+    else:
+        context.update_cursor(
+            str(response.status_code)
+        )  # Optionally update cursor to log last status code
+
+
+defs = Definitions(
+    assets=[shibe_image_data, shibe_picture_url],
+    sensors=[shibe_api_availability_sensor],
+)
