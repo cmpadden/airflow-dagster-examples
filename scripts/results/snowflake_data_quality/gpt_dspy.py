@@ -1,5 +1,5 @@
-from dagster import Definitions, asset, Config, MaterializeResult, MetadataValue
 import pandas as pd
+from dagster import Config, Definitions, MaterializeResult, MetadataValue, asset
 
 
 class TripDataPreparationConfig(Config):
@@ -11,7 +11,9 @@ class TripDataPreparationConfig(Config):
 def trip_data_preparation_and_upload(
     config: TripDataPreparationConfig,
 ) -> MaterializeResult:
-    """Prepares trip data by reading from a CSV, adding an 'upload_date' column, and saving it."""
+    """
+    Prepares trip data by reading from a CSV, adding an 'upload_date' column, and saving it.
+    """
     trip_data = pd.read_csv(
         config.file_path,
         header=0,
@@ -32,7 +34,9 @@ def trip_data_preparation_and_upload(
 
 @asset
 def snowflake_resources_setup_and_cleanup() -> MaterializeResult:
-    """Manages Snowflake resources by creating and cleaning up tables and stages."""
+    """
+    Manages Snowflake resources by creating and cleaning up tables and stages.
+    """
     # Logic to create and delete table and stage
     # Placeholder for SQL execution logic
     # Assuming success for demonstration
@@ -45,7 +49,9 @@ def snowflake_resources_setup_and_cleanup() -> MaterializeResult:
 def trip_data_loading_and_quality_checks(
     prepared_tripdata, snowflake_resources_setup_and_cleanup
 ) -> MaterializeResult:
-    """Loads trip data from S3 to Snowflake and performs data quality checks."""
+    """
+    Loads trip data from S3 to Snowflake and performs data quality checks.
+    """
     # Logic to load data to Snowflake
     # Data quality checks: row count, interval data, threshold checks, and row quality checks
     # Placeholder for actual logic, assuming checks passed for demonstration

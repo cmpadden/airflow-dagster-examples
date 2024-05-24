@@ -1,14 +1,14 @@
+import duckdb
+import pandas as pd
 from dagster import (
-    asset,
     Config,
+    Definitions,
     MaterializeResult,
     MetadataValue,
-    Definitions,
-    define_asset_job,
     ScheduleDefinition,
+    asset,
+    define_asset_job,
 )
-import pandas as pd
-import duckdb
 from pydantic import Field
 
 
@@ -88,19 +88,18 @@ def filtered_duck_info(duck_info, config: FilteredDuckInfoConfig):
     )
 
 
-# Define the job
-duck_info_job = define_asset_job(
-    "duck_info_job", selection=[duck_info, filtered_duck_info]
+weekly_duck_info_job = define_asset_job(
+    "weekly_duck_info_job", selection=[duck_info, filtered_duck_info]
 )
 
-# Define the schedule
-weekly_schedule = ScheduleDefinition(
-    job=duck_info_job,
-    cron_schedule="0 0 * * 0",  # Every Sunday at midnight
+weekly_duck_info_schedule = ScheduleDefinition(
+    job=weekly_duck_info_job,
+    cron_schedule="0 0 * * 0",  # every Sunday at midnight
 )
+
 
 defs = Definitions(
     assets=[duck_info, filtered_duck_info],
-    jobs=[duck_info_job],
-    schedules=[weekly_schedule],
+    jobs=[weekly_duck_info_job],
+    schedules=[weekly_duck_info_schedule],
 )

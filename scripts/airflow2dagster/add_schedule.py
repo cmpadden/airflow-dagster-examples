@@ -1,7 +1,11 @@
 import logging
 
 import dspy
-from airflow2dagster.utils import extract_code_block_from_markdown
+from airflow2dagster.constants import PLACEHOLDER_MODULE_FILENAME
+from airflow2dagster.utils import (
+    combine_code_snippets,
+    extract_code_block_from_markdown,
+)
 from metrics.run_validity import is_runnable
 from pydantic import BaseModel
 
@@ -14,6 +18,7 @@ class Output(BaseModel):
 
 class DetectScheduleSignature(dspy.Signature):
     """Does the following Airflow DAG contain a schedule?"""
+
     # Assumption: There is only one input DAG
 
     airflow_code = dspy.InputField(desc="Airflow code containing schedule")
@@ -24,18 +29,23 @@ class DetectScheduleSignature(dspy.Signature):
 
 class AddScheduleSignature(dspy.Signature):
     """
-    Create an asset job over the assets and add a schedule to it.
+    Create an asset job over the Dagster assets and add a schedule to it.
 
     The schedule should be consistent with the Airflow code and uses `define_asset_job`.
 
-    Do not modify the input code.
+    Do not generate the `Definitions` object or anything else.
     """
 
     context = dspy.InputField(desc="Potentially relevant Dagster documentation")
     airflow_code = dspy.InputField(desc="Airflow code containing schedule")
-    input_dagster_code = dspy.InputField(desc="Dagster code without schedule")
-    dagster_code = dspy.OutputField(
-        desc="Input Dagster code with similar schedule to Airflow code, as a single file"
+    input_dagster_code = dspy.InputField(
+        desc=f"Assume that it is located in a sibling Python module `{PLACEHOLDER_MODULE_FILENAME}`"
+    )
+    schedule_code = dspy.OutputField(
+        desc=(
+            "Dagster schedule code that is equivalent to Airflow's, in a separate file. "
+            "The code imports the necessary objects from the input dagster code"
+        )
     )
 
 
@@ -59,18 +69,21 @@ class AddScheduleModule(dspy.Module):
             airflow_code=airflow_code,
             input_dagster_code=input_dagster_code,
         )
-        pred.dagster_code = extract_code_block_from_markdown(pred.dagster_code)
+        pred.schedule_code = extract_code_block_from_markdown(pred.schedule_code)
 
         dspy.Assert(
-            "define_asset_job" in pred.dagster_code,
+            "define_asset_job" in pred.schedule_code,
             "Use `define_asset_job` to create a job over the assets",
         )
+
         dspy.Assert(
-            "@asset" in pred.dagster_code,
-            "Do not forget to include the input Dagster code in the final code.",
+            "Definitions" not in pred.schedule_code,
+            "Do not generate the `Definitions` object. Only the asset jobs and schedules are needed",
         )
+
+        concatenated_code = combine_code_snippets([input_dagster_code, pred.schedule_code])
         dspy.Suggest(
-            *is_runnable(pred.dagster_code, verbose=True)
+            *is_runnable(concatenated_code, verbose=True)
         )  # Some code cannot be run without external dependencies
 
-        return dspy.Prediction(dagster_code=pred.dagster_code)
+        return dspy.Prediction(dagster_code=concatenated_code)
