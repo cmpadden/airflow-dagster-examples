@@ -1,64 +1,68 @@
-Here's the Dagster code that replicates the functionality of the provided Airflow code using Dagster assets:
+Here's the Dagster code that mirrors the functionality of the provided Airflow code. This code uses Dagster's asset-based approach and avoids using outdated APIs like `solid` or `ops`.
 
 ```python
-from dagster import job, op, AssetIn, AssetOut, AssetMaterialization, IOManager, io_manager
-from dagster import repository
+from dagster import job, asset
 import pandas as pd
 import duckdb
-import os
-import pyarrow.parquet as pq
+from pathlib import Path
 
-class LocalFileSystemIOManager(IOManager):
-    def handle_output(self, context, obj):
-        filepath = os.path.join(context.resource_config["base_path"], context.asset_key.path[-1])
-        if isinstance(obj, pd.DataFrame):
-            obj.to_parquet(filepath)
-        elif isinstance(obj, duckdb.DuckDBPyConnection):
-            # Assuming obj is a connection, this is a no-op for output handling.
-            pass
+base_path = Path("include/")
 
-    def load_input(self, context):
-        filepath = os.path.join(context.upstream_output.resource_config["base_path"], context.asset_key.path[-1])
-        if 'parquet' in filepath:
-            return pd.read_parquet(filepath)
-        return duckdb.connect(database=filepath)
-
-@io_manager(config_schema={"base_path": str})
-def local_file_system_io_manager(init_context):
-    return LocalFileSystemIOManager()
-
-@op(out={"parquet_file": AssetOut(io_manager_key="local_file_system_io_manager")})
+@asset
 def create_parquet_file():
+    """Create a table about ducks and save it as a parquet file."""
     data = {
         "name": ["Mallard", "Pekin", "Muscovy", "Rouen", "Indian Runner"],
-        "country_of_origin": ["North America", "China", "South America", "France", "India"],
-        "job": ["Friend", "Friend, Eggs", "Friend, Pest Control", "Friend, Show", "Eggs, Friend"],
+        "country_of_origin": [
+            "North America",
+            "China",
+            "South America",
+            "France",
+            "India",
+        ],
+        "job": [
+            "Friend",
+            "Friend, Eggs",
+            "Friend, Pest Control",
+            "Friend, Show",
+            "Eggs, Friend",
+        ],
         "num": [3, 5, 6, 2, 3],
         "num_quacks_per_hour": [10, 20, 25, 5, 44],
     }
+
     df = pd.DataFrame(data)
-    return df
+    df_parquet = df.to_parquet(index=False)
+    file_path = base_path / "duck_info.parquet"
+    file_path.write_bytes(df_parquet)
+    return file_path
 
-@op(ins={"parquet_file": AssetIn()}, out={"duckdb_conn": AssetOut(io_manager_key="local_file_system_io_manager")})
-def ingest_to_duckdb(parquet_file):
-    conn = duckdb.connect(database="include/duckdb.db")
-    conn.execute(f"CREATE OR REPLACE TABLE ducks_table AS SELECT * FROM '{parquet_file}'")
-    return conn
+@asset
+def ingest_to_duckdb(file_path):
+    """Ingest the parquet file into a duckdb database."""
+    conn = duckdb.connect(database=str(base_path / "duckdb.db"))
+    conn.register_filesystem(file_path.parent)
+    conn.execute(
+        f"CREATE OR REPLACE TABLE ducks_table AS SELECT * FROM read_parquet('{file_path}')"
+    )
+    conn.close()
 
-@op(ins={"duckdb_conn": AssetIn()})
-def read_from_duckdb(duckdb_conn):
-    ducks_info = duckdb_conn.execute("SELECT * FROM ducks_table WHERE num_quacks_per_hour > 15").fetchdf()
+@asset
+def read_from_duckdb():
+    """Read and return the duckdb table."""
+    conn = duckdb.connect(database=str(base_path / "duckdb.db"))
+    ducks_info = conn.execute(
+        f"SELECT * FROM ducks_table WHERE num_quacks_per_hour > 15"
+    ).fetchdf()
     print(ducks_info)
+    return ducks_info
 
-@job(resource_defs={"local_file_system_io_manager": local_file_system_io_manager})
+@job
 def object_storage_load_file_to_duckdb():
-    parquet_file = create_parquet_file()
-    duckdb_conn = ingest_to_duckdb(parquet_file)
-    read_from_duckdb(duckdb_conn)
+    file_path = create_parquet_file()
+    ingest_to_duckdb(file_path)
+    read_from_duckdb()
 
-@repository
-def my_repository():
-    return [object_storage_load_file_to_duckdb]
 ```
 
-This Dagster code defines a job `object_storage_load_file_to_duckdb` that performs the same operations as the Airflow DAG. It uses an IOManager to handle file operations, ensuring that the parquet file is written and read correctly. The `create_parquet_file` op creates a DataFrame and writes it to a parquet file. The `ingest_to_duckdb` op reads this parquet file and ingests it into a DuckDB database. Finally, the `read_from_duckdb` op reads from the database and prints the results. The repository function wraps the job for Dagster to recognize it.
+This code defines three assets in Dagster, each corresponding to a task in the Airflow DAG. The `@job` decorator is used to define the workflow, which specifies the execution order of the assets. The assets interact with each other through their outputs and inputs, similar to how tasks are chained in Airflow. The use of `Path` from the `pathlib` module handles file paths, and the `duckdb` operations are adjusted to work with the local file system.

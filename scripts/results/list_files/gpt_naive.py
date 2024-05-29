@@ -1,72 +1,59 @@
-Here's the Dagster equivalent of the provided Airflow code, using Dagster's asset-based approach:
+Here's the Dagster equivalent of the provided Airflow code. This code uses Dagster's asset-based approach to replicate the functionality of listing, copying, and reading files from object storage:
 
 ```python
 from dagster import job, asset, AssetIn, AssetOut, AssetMaterialization, IOManager, io_manager
-from dagster_aws.s3 import s3_pickle_io_manager
-from pathlib import Path
-import shutil
-import boto3
+from dagster.io.path import ObjectStoragePath
 
-# Configuration for S3 and local file system paths
 OBJECT_STORAGE = "s3"
 CONN_ID = "aws_s3_webinar_conn"
 PATH = "ce-2-8-examples-bucket"
-LOCAL_STORAGE_PATH = "include/poems/"
 
-# Define an IOManager for handling S3 objects
-class S3IOManager(IOManager):
-    def __init__(self):
-        self.s3 = boto3.client('s3')
+base_src = ObjectStoragePath(f"{OBJECT_STORAGE}://{PATH}", conn_id=CONN_ID)
+base_dst = ObjectStoragePath(f"file://include/poems/")
 
+class ObjectStorageIOManager(IOManager):
     def handle_output(self, context, obj):
-        bucket, key = obj.split("/", 1)
-        self.s3.upload_fileobj(obj, bucket, key)
+        if isinstance(obj, ObjectStoragePath):
+            obj.copy(dst=context.asset_key.path)
 
     def load_input(self, context):
-        input_asset = context.upstream_output
-        bucket, key = input_asset.split("/", 1)
-        response = self.s3.get_object(Bucket=bucket, Key=key)
-        return response['Body'].read()
+        return context.upstream_output
 
 @io_manager
-def s3_io_manager(_):
-    return S3IOManager()
+def object_storage_io_manager():
+    return ObjectStorageIOManager()
 
-# Asset to list files in S3 bucket
-@asset(io_manager_key="s3_io_manager")
-def list_files_s3() -> list:
-    s3 = boto3.client('s3')
-    response = s3.list_objects_v2(Bucket=PATH)
-    files = [f"s3://{PATH}/{content['Key']}" for content in response.get('Contents', [])]
+@asset(io_manager_key="object_storage_io_manager", required_resource_keys={"object_storage_io_manager"})
+def list_files() -> list[ObjectStoragePath]:
+    """List files in remote object storage."""
+    path = base_src / "poems/"
+    files = [f for f in path.iterdir() if f.is_file()]
     return files
 
-# Asset to copy files from S3 to local storage
-@asset(ins={"files": AssetIn(asset_key="list_files_s3")}, required_resource_keys={"io_manager"})
-def copy_files_to_local(context, files: list):
-    local_path = Path(LOCAL_STORAGE_PATH)
-    local_path.mkdir(parents=True, exist_ok=True)
-    for file_path in files:
-        file_name = Path(file_path).name
-        local_file_path = local_path / file_name
-        with open(local_file_path, 'wb') as f:
-            shutil.copyfileobj(file_path, f)
-        yield AssetMaterialization(asset_key="copy_files_to_local", description="File copied to local storage", metadata={"file_path": str(local_file_path)})
+@asset(io_manager_key="object_storage_io_manager", required_resource_keys={"object_storage_io_manager"})
+def copy_file_to_local(file: AssetIn) -> AssetOut:
+    """Copy a file from remote to local storage."""
+    dst_path = base_dst / file.path.name
+    file.copy(dst=dst_path)
+    return dst_path
 
-# Asset to read file content
-@asset(ins={"files": AssetIn(asset_key="list_files_s3")})
-def read_file_content(files: list) -> list:
-    contents = []
-    for file_path in files:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            contents.append(f.read())
-    return contents
+@asset(io_manager_key="object_storage_io_manager", required_resource_keys={"object_storage_io_manager"})
+def read_file_content(file: AssetIn) -> str:
+    """Read a file from remote object storage and return utf-8 decoded text."""
+    bytes = file.read_block(offset=0, length=None)
+    text = bytes.decode("utf-8")
+    return text
 
-# Define the job to orchestrate the assets
-@job(resource_defs={"io_manager": s3_io_manager})
+@job
 def object_storage_list_read_remote():
-    files = list_files_s3()
-    copy_files_to_local(files)
-    read_file_content(files)
+    files_s3 = list_files()
+    copied_files = copy_file_to_local.map(files_s3)
+    file_contents = read_file_content.map(copied_files)
 ```
 
-This Dagster code defines assets for listing files in S3, copying them to local storage, and reading their contents. It uses an `IOManager` for handling S3 operations and organizes the tasks into a Dagster job. Adjust the S3 client configuration as needed for your environment.
+This code defines three assets in Dagster:
+1. `list_files`: Lists files in the specified remote object storage path.
+2. `copy_file_to_local`: Copies each file from the remote storage to a local path.
+3. `read_file_content`: Reads the content of each file.
+
+The `@job` decorator is used to define the workflow, where each asset is computed based on the outputs of the previous assets. The `ObjectStorageIOManager` class is a custom IO manager that handles the copying of files between object storage locations, which is used by the assets to manage their outputs.

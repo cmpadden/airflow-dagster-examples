@@ -1,76 +1,52 @@
-from dagster import (
-    asset,
-    Config,
-    MaterializeResult,
-    MetadataValue,
-    Definitions,
-    define_asset_job,
-    ScheduleDefinition,
-    DefaultScheduleStatus,
-    RetryPolicy,
-)
+
+from dagster import asset, MaterializeResult, MetadataValue, Config, define_asset_job, ScheduleDefinition, Definitions, AssetExecutionContext, RetryPolicy
 import requests
-import logging
-import json
+from typing import Dict
 from pydantic import Field
 
-
-class BitcoinMarketDataConfig(Config):
+class BitcoinDataConfig(Config):
     api_url: str = Field(
         default="https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true",
-        description="API URL to fetch Bitcoin market data",
+        description="The API URL to fetch Bitcoin data"
     )
 
+@asset(retry_policy=RetryPolicy(max_retries=2))
+def bitcoin_data(context: AssetExecutionContext, config: BitcoinDataConfig) -> MaterializeResult:
+    """Extracts and processes the Bitcoin price from the API."""
+    response = requests.get(config.api_url)
+    response.raise_for_status()
+    bitcoin_price = response.json()["bitcoin"]
 
-def fetch_bitcoin_data(api_url: str):
-    try:
-        response = requests.get(api_url)
-        response.raise_for_status()  # Raises an HTTPError for bad responses
-        return response.json()["bitcoin"]
-    except requests.RequestException as e:
-        logging.error(f"Failed to fetch data: {e}")
-        return None
-
-
-@asset(name="bitcoin_market_data")
-def bitcoin_market_data(config: BitcoinMarketDataConfig) -> MaterializeResult:
-    bitcoin_data = fetch_bitcoin_data(config.api_url)
-    if bitcoin_data is None:
-        return MaterializeResult(
-            metadata={"error": MetadataValue.text("Failed to fetch data")}
-        )
-    processed_data = {
-        "usd": bitcoin_data["usd"],
-        "change": bitcoin_data["usd_24h_change"],
+    # Process the data
+    data = {
+        "usd": bitcoin_price["usd"],
+        "change": bitcoin_price["usd_24h_change"]
     }
-    logging.info(
-        f"Bitcoin Market Data: USD {processed_data['usd']} with change {processed_data['change']}"
-    )
-    # Convert the raw data to JSON for metadata
-    raw_data_json = json.dumps(bitcoin_data, indent=2)
-    # Create metadata entries
-    metadata_entries = {
-        "raw_data": MetadataValue.json(raw_data_json),
-        "log": MetadataValue.text(
-            f"USD {processed_data['usd']} with change {processed_data['change']}"
-        ),
+
+    # Log the processed data
+    context.log.info(f"Bitcoin Price: {data['usd']} with 24h change: {data['change']}")
+
+    # Attach metadata to the asset
+    metadata = {
+        "usd": MetadataValue.float(data["usd"]),
+        "change": MetadataValue.float(data["change"]),
+        "source": MetadataValue.url(config.api_url)
     }
-    return MaterializeResult(output=processed_data, metadata=metadata_entries)
 
+    return MaterializeResult(metadata=metadata)
 
-# Define the job with retry policy
-retry_policy = RetryPolicy(max_retries=2)
-bitcoin_job = define_asset_job(
-    "bitcoin_job", selection=["bitcoin_market_data"], op_retry_policy=retry_policy
+# Define a job that will materialize the bitcoin_data asset
+bitcoin_data_job = define_asset_job("bitcoin_data_job", selection=[bitcoin_data])
+
+# Define a schedule that runs the job daily
+bitcoin_data_schedule = ScheduleDefinition(
+    job=bitcoin_data_job,
+    cron_schedule="0 0 * * *",  # daily at midnight
 )
 
-# Define the schedule
-bitcoin_schedule = ScheduleDefinition(
-    job=bitcoin_job,
-    cron_schedule="0 0 * * *",  # Daily at midnight
-    default_status=DefaultScheduleStatus.RUNNING,
-)
-
+# Create the Definitions object
 defs = Definitions(
-    assets=[bitcoin_market_data], jobs=[bitcoin_job], schedules=[bitcoin_schedule]
+    assets=[bitcoin_data],
+    jobs=[bitcoin_data_job],
+    schedules=[bitcoin_data_schedule],
 )
