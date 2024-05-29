@@ -1,4 +1,4 @@
-Here's the Dagster equivalent of the provided Airflow code, using Dagster's asset-based approach:
+Here's the Dagster equivalent of the provided Airflow code using Dagster's asset-based approach:
 
 ```python
 from dagster import asset, repository, AssetIn, AssetOut, AssetMaterialization, MetadataValue
@@ -7,56 +7,52 @@ import time
 
 def check_api_availability():
     """
-    Function to check the availability of the Shibe API and return the response JSON if available.
+    Function to check the availability of the Shibe API.
     """
     response = requests.get("http://shibe.online/api/shibes?count=1&urls=true")
     if response.status_code == 200:
         return response.json()
     else:
-        raise ValueError(f"API check failed with status code {response.status_code}")
+        raise ValueError(f"API returned an unexpected status code: {response.status_code}")
 
 @asset
 def shibe_availability():
     """
-    Asset to represent the availability check of the Shibe API.
+    Dagster asset to represent the availability of the Shibe API.
     """
     timeout = 3600
     start_time = time.time()
-    while True:
+    while time.time() - start_time < timeout:
         try:
             result = check_api_availability()
             yield AssetMaterialization(
                 asset_key="shibe_availability",
-                metadata={
-                    "url": MetadataValue.url(result[0])
-                }
+                description="Shibe API is available.",
+                metadata={"url": MetadataValue.url(result[0])}
             )
-            return result
+            return result[0]
         except ValueError as e:
-            if time.time() - start_time > timeout:
-                raise TimeoutError("API availability check timed out.") from e
-            time.sleep(10)  # Poke interval
+            print(e)
+            time.sleep(10)
+    raise TimeoutError("API check timed out after 3600 seconds.")
 
 @asset(required_resource_keys={"shibe_availability"})
-def print_shibe_picture_url(context):
+def print_shibe_picture_url(shibe_availability):
     """
-    Asset to print the URL of the Shibe picture.
+    Dagster asset to print the URL of the Shibe picture.
     """
-    url = context.resources.shibe_availability[0]
-    print(url)
+    print(shibe_availability)
 
 @repository
-def shibe_repository():
+def sensor_decorator_repo():
     """
-    Repository to hold our assets.
+    Repository to hold the assets.
     """
     return [shibe_availability, print_shibe_picture_url]
 ```
 
-### Key Points:
-1. **Asset Definition**: The `shibe_availability` asset checks the availability of the Shibe API and materializes the URL if successful. It simulates the sensor behavior by retrying every 10 seconds until a timeout is reached.
-2. **Error Handling**: If the API is not available within the specified timeout, a `TimeoutError` is raised.
-3. **Repository**: The `shibe_repository` contains all assets. Dagster uses repositories to manage and execute assets.
-4. **Execution**: To run this code, you would typically use Dagster's tooling, such as Dagit or the Dagster CLI, to execute the assets in the repository.
+This code defines two assets in Dagster:
+1. `shibe_availability`: This asset checks the availability of the Shibe API. It tries to access the API and waits for a successful response, retrying every 10 seconds until a timeout is reached.
+2. `print_shibe_picture_url`: This asset depends on the `shibe_availability` asset and prints the URL of the Shibe picture.
 
-This code is designed to be directly executable in a Python environment where Dagster is installed, assuming network access to the specified API.
+The `@repository` decorator is used to bundle these assets into a repository, which Dagster uses to manage execution and scheduling. This setup ensures that the Shibe API's availability is checked before attempting to print the URL, similar to the Airflow sensor and task dependency.

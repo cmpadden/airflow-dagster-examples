@@ -45,7 +45,8 @@ def astronaut_messages(config: AstronautMessagesConfig) -> MaterializeResult:
             messages[0] if messages else "No astronauts currently in space."
         ),
     }
-    return MaterializeResult(output=messages, metadata=metadata)
+    return MaterializeResult(output=list_of_people_in_space, metadata=metadata)
+
 
 
 # Define the retry policy
@@ -66,7 +67,7 @@ astronaut_schedule = ScheduleDefinition(
 
 # Add the job and schedule to the Definitions object
 defs = Definitions(
-    assets=[astronaut_messages],
-    jobs=[astronaut_job],
-    schedules=[astronaut_schedule],
+    assets=[current_astronauts, astronaut_crafts],
+    jobs=[astronauts_job],
+    schedules=[astronauts_schedule],
 )

@@ -7,7 +7,7 @@ from metrics.utils import persistent_cache
 
 @persistent_cache
 def check_assets_only(dagster_code: str) -> bool:
-    base_model = "gpt-4-turbo"
+    base_model = "gpt-4o-2024-05-13"
 
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -44,7 +44,7 @@ def check_assets_only(dagster_code: str) -> bool:
 
 @persistent_cache
 def check_scheduling_definition(dagster_code: str) -> bool:
-    base_model = "gpt-4-turbo"
+    base_model = "gpt-4o-2024-05-13"
 
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 

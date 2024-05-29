@@ -5,9 +5,17 @@ from metrics.run_validity import is_runnable
 
 class AddRetryPolicySignature(dspy.Signature):
     """
-    Add `RetryPolicy` to the Dagster asset (/job). Do not use `@op`-based retries.
+    Add `RetryPolicy` to the Dagster asset. Do not use `@op`-based retries, or `op_*` parameters to set this retry policy.
 
-    Retries can be added to an asset job via the `op_retry_policy` parameter.
+    Retries can be added to an asset by using the `RetryPolicy` object. This object can be added to the asset using the `@asset` decorator. For example, notice how this retry policy is added to the function's retry_policy argument below:
+
+    ```
+    from dagster import RetryPolicy, asset
+
+    @asset(retry_policy=RetryPolicy(max_retries=3))
+    def my_asset():
+        pass
+    ```
     """
 
     airflow_code = dspy.InputField(desc="Airflow code containing retry requirements")

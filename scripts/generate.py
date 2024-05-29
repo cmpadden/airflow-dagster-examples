@@ -14,7 +14,7 @@ app = typer.Typer()
 @persistent_cache
 def generate_gpt_naive(airflow_code: str) -> str:
     # 4k tokens
-    base_model = "gpt-4-turbo"
+    base_model = "gpt-4o-2024-05-13"
 
     # 32k tokens
     # base_model = "gpt-4-32k"

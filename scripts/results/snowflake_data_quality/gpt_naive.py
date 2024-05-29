@@ -1,75 +1,81 @@
 ```python
-from dagster import job, op, AssetIn, AssetOut, AssetMaterialization, IOManager, io_manager
-from dagster import AssetGroup
+from dagster import job, op, graph, repository, AssetIn, AssetOut, AssetMaterialization, IOManager, io_manager
+from dagster import asset
 import pandas as pd
-import os
-from typing import List
+import datetime
 
-# Define the table and dates as constants
-TABLE = "YELLOW_TRIPDATA_WITH_UPLOAD_DATE"
-DATES = ["2019-01", "2019-02"]
-
-# Define an IOManager for handling CSV files
-class CsvIOManager(IOManager):
+class LocalFileSystemIOManager(IOManager):
     def handle_output(self, context, obj):
-        filepath = os.path.join(context.resource_config["base_dir"], context.asset_key.path[-1])
+        filepath = context.get_output_context().metadata["path"]
         obj.to_csv(filepath, index=False)
 
     def load_input(self, context):
-        filepath = os.path.join(context.resource_config["base_dir"], context.upstream_output.asset_key.path[-1])
+        filepath = context.upstream_output.metadata["path"]
         return pd.read_csv(filepath)
 
-@io_manager(config_schema={"base_dir": str})
-def csv_io_manager(init_context):
-    return CsvIOManager()
+@io_manager
+def local_file_system_io_manager(_):
+    return LocalFileSystemIOManager()
 
-# Define operations for data manipulation
-@op(out={"result": AssetOut(io_manager_key="csv_io_manager")})
+@op(required_resource_keys={"snowflake"}, out=AssetOut(metadata={"path": "path_to_modified_file"}))
 def add_upload_date(context, file_path: str, upload_date: str):
-    trip_dict = pd.read_csv(file_path, header=0, parse_dates=["pickup_datetime"], infer_datetime_format=True)
+    trip_dict = pd.read_csv(file_path)
     trip_dict["upload_date"] = upload_date
-    context.log_event(AssetMaterialization(asset_key="add_upload_date", description="Added upload date to CSV."))
+    context.log.info(f"Added upload_date to {file_path}")
     return trip_dict
 
-@op(out={"result": AssetOut(io_manager_key="csv_io_manager")})
+@op(required_resource_keys={"snowflake"}, out=AssetOut(metadata={"path": "path_to_modified_file"}))
 def delete_upload_date(context, file_path: str):
-    trip_dict = pd.read_csv(file_path, header=0, parse_dates=["pickup_datetime"], infer_datetime_format=True)
+    trip_dict = pd.read_csv(file_path)
     trip_dict.drop(columns="upload_date", inplace=True)
-    context.log_event(AssetMaterialization(asset_key="delete_upload_date", description="Removed upload date from CSV."))
+    context.log.info(f"Removed upload_date from {file_path}")
     return trip_dict
 
-# Define a job to orchestrate the operations
-@job(resource_defs={"csv_io_manager": csv_io_manager})
+@op(required_resource_keys={"snowflake"})
+def create_snowflake_table(context):
+    context.resources.snowflake.execute_sql("CREATE TABLE ...")
+
+@op(required_resource_keys={"snowflake"})
+def create_snowflake_stage(context):
+    context.resources.snowflake.execute_sql("CREATE STAGE ...")
+
+@op(required_resource_keys={"snowflake"})
+def delete_snowflake_table(context):
+    context.resources.snowflake.execute_sql("DROP TABLE ...")
+
+@op(required_resource_keys={"snowflake"})
+def check_row_count(context):
+    result = context.resources.snowflake.execute_sql("SELECT COUNT(*) FROM ...")
+    assert result == 20000, "Row count check failed"
+
+@op(required_resource_keys={"snowflake"})
+def check_interval_data(context):
+    result = context.resources.snowflake.execute_sql("SELECT AVG(trip_distance) FROM ...")
+    assert result < 1.5, "Interval check failed"
+
+@op(required_resource_keys={"snowflake"})
+def check_threshold(context):
+    result = context.resources.snowflake.execute_sql("SELECT MAX(passenger_count) FROM ...")
+    assert 1 <= result <= 8, "Threshold check failed"
+
+@graph
+def process_trip_data(file_path: str, upload_date: str):
+    modified_data = add_upload_date(file_path, upload_date)
+    delete_upload_date(modified_data)
+
+@job(resource_defs={"snowflake": ..., "io_manager": local_file_system_io_manager})
 def taxi_snowflake():
-    for date in DATES:
-        file_name = f"yellow_tripdata_sample_{date}.csv"
-        file_path = f"/usr/local/airflow/include/sample_data/yellow_trip_data/{file_name}"
-        upload_date = f"2023-01-01"  # Example static date, replace with dynamic logic if needed
+    create_snowflake_table()
+    create_snowflake_stage()
+    process_trip_data()
+    check_row_count()
+    check_interval_data()
+    check_threshold()
+    delete_snowflake_table()
 
-        added_date_df = add_upload_date(file_path, upload_date)
-        cleaned_df = delete_upload_date(added_date_df)
-
-# Define an asset group if needed for more complex dependencies
-assets = AssetGroup(
-    [
-        add_upload_date,
-        delete_upload_date
-    ],
-    resource_defs={"csv_io_manager": csv_io_manager}
-)
-
-if __name__ == "__main__":
-    taxi_snowflake.execute_in_process(
-        run_config={
-            "resources": {
-                "csv_io_manager": {
-                    "config": {
-                        "base_dir": "/path/to/your/csv/storage"
-                    }
-                }
-            }
-        }
-    )
+@repository
+def my_repository():
+    return [taxi_snowflake]
 ```
 
-This Dagster code provides a direct translation of the Airflow tasks into Dagster operations (`@op`) and manages file I/O through a custom `CsvIOManager`. The job `taxi_snowflake` orchestrates these operations. Adjust the file paths and other configurations as necessary to fit your environment.
+This Dagster code provides a structured migration from the Airflow example, focusing on data quality checks and transformations using Snowflake and local file operations. The `@op` and `@graph` decorators are used to define operations and workflows, respectively, and the `@job` decorator to define the execution plan. The `LocalFileSystemIOManager` class is used to manage file I/O operations, replacing direct file handling in the original Airflow tasks.
