@@ -1,26 +1,15 @@
-from dagster import (
-    asset,
-    Config,
-    MaterializeResult,
-    MetadataValue,
-    Definitions,
-    define_asset_job,
-    ScheduleDefinition,
-    DefaultScheduleStatus,
-    RetryPolicy,
-)
+
+from dagster import asset, Config, MaterializeResult, MetadataValue, Definitions, ScheduleDefinition, define_asset_job, RetryPolicy
 import requests
 import logging
 import json
 from pydantic import Field
 
-
 class BitcoinMarketDataConfig(Config):
     api_url: str = Field(
-        default="https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true",
-        description="API URL to fetch Bitcoin market data",
+        default="https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24h_change=true&include_last_updated_at=true",
+        description="API URL to fetch Bitcoin market data"
     )
-
 
 def fetch_bitcoin_data(api_url: str):
     try:
@@ -57,9 +46,10 @@ def bitcoin_market_data(config: BitcoinMarketDataConfig) -> MaterializeResult:
     }
     return MaterializeResult(output=processed_data, metadata=metadata_entries)
 
+# Define the retry policy
+retry_policy = RetryPolicy(max_retries=2)
 
 # Define the job with retry policy
-retry_policy = RetryPolicy(max_retries=2)
 bitcoin_job = define_asset_job(
     "bitcoin_job", selection=["bitcoin_market_data"], op_retry_policy=retry_policy
 )
@@ -67,10 +57,10 @@ bitcoin_job = define_asset_job(
 # Define the schedule
 bitcoin_schedule = ScheduleDefinition(
     job=bitcoin_job,
-    cron_schedule="0 0 * * *",  # Daily at midnight
-    default_status=DefaultScheduleStatus.RUNNING,
+    cron_schedule="0 0 * * *",  # every day at midnight
 )
 
+# Update Definitions
 defs = Definitions(
     assets=[bitcoin_market_data], jobs=[bitcoin_job], schedules=[bitcoin_schedule]
 )

@@ -1,31 +1,31 @@
 from dagster import (
     Definitions,
     define_asset_job,
-    ScheduleDefinition,
-    AssetSelection,
+    load_assets_from_modules,
     DefaultScheduleStatus,
+    asset,
+    Config,
+    MaterializeResult,
+    MetadataValue
 )
+from typing import List
 from pathlib import Path
 import shutil
 import os
 from pydantic import Field
-from dagster import asset, Config, MaterializeResult, MetadataValue
 
-
+# Define the configuration for the asset
 class TransferAndReadPoemsConfig(Config):
     object_storage: str = Field(default="s3", description="Type of object storage")
-    conn_id: str = Field(
-        default="aws_s3_webinar_conn", description="Connection ID for AWS S3"
-    )
+    conn_id: str = Field(default="aws_s3_webinar_conn", description="Connection ID for AWS S3")
     path: str = Field(default="ce-2-8-examples-bucket", description="Bucket path in S3")
-    local_storage_path: str = Field(
-        default="/include/poems/", description="Local storage path for poems"
-    )
+    local_storage_path: str = Field(default="/include/poems/", description="Local storage path for poems")
 
-
+# Define the asset
 @asset
 def transfer_and_read_poems(config: TransferAndReadPoemsConfig) -> MaterializeResult:
-    """Transfer poem files from remote S3 storage to local storage and read their contents.
+    """
+    Transfer poem files from remote S3 storage to local storage and read their contents.
     Returns:
         MaterializeResult: Contains the list of contents of each poem file and metadata.
     """
@@ -47,19 +47,25 @@ def transfer_and_read_poems(config: TransferAndReadPoemsConfig) -> MaterializeRe
     }
     return MaterializeResult(contents, metadata)
 
+# Load assets from the current module
+all_assets = load_assets_from_modules([__name__])
 
 # Define a job that will materialize the assets
-poems_job = define_asset_job(
-    "poems_job", selection=AssetSelection.assets(transfer_and_read_poems)
+transfer_and_read_poems_job = define_asset_job(
+    "transfer_and_read_poems_job",
+    selection=AssetSelection.all()  # Selects all assets, adjust if necessary
 )
 
-# Define a schedule that runs the job every Sunday at midnight
-poems_schedule = ScheduleDefinition(
-    job=poems_job,
+# Define a schedule for the job with a cron expression for weekly execution on Sunday at midnight
+transfer_and_read_poems_schedule = ScheduleDefinition(
+    job=transfer_and_read_poems_job,
     cron_schedule="0 0 * * 0",  # every Sunday at midnight
-    default_status=DefaultScheduleStatus.RUNNING,
+    default_status=DefaultScheduleStatus.RUNNING  # Automatically start the schedule
 )
 
+# Update the Definitions object to include the job and schedule
 defs = Definitions(
-    assets=[transfer_and_read_poems], jobs=[poems_job], schedules=[poems_schedule]
+    assets=all_assets,
+    jobs=[transfer_and_read_poems_job],
+    schedules=[transfer_and_read_poems_schedule]
 )
